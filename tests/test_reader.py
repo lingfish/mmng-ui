@@ -1,7 +1,7 @@
 import moment
 import pytest
 
-from reader import parse_line
+from mmng_ui.reader import parse_line
 
 
 @pytest.fixture
