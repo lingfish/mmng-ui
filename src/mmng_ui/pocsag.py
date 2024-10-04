@@ -1,4 +1,5 @@
 import re
+import shutil
 import sys
 from collections import deque
 from datetime import datetime
@@ -8,6 +9,7 @@ from subprocess import PIPE
 from dataclasses import dataclass
 from time import sleep
 
+import click
 import moment
 from rich import inspect
 from rich.text import Text
@@ -22,8 +24,10 @@ from textual import work, events
 from textual.message import Message
 from textual.binding import Binding
 from textual.actions import SkipAction
+from textual.worker import Worker, WorkerState
 
-from .reader import parse_line
+from mmng_ui.reader import parse_line
+from mmng_ui._version import __version__
 
 
 def parse_datetime(time_string: str, format_string: str) -> int:
@@ -58,7 +62,7 @@ class Status:
     ip_address: str
 
     def __repr__(self):
-        return(f'Receiver: {self.receiver}\nIP address: {self.ip_address}')
+        return f'Receiver: {self.receiver}\nIP address: {self.ip_address}'
 
 class UDPHandler(asyncio.DatagramProtocol):
     def __init__(self, app, loop):
@@ -97,7 +101,7 @@ class StatusWidget(Widget):
     ip_address = reactive('[wheat4]None[/]')
 
     def render(self) -> str:
-        return(f'Receiver: {self.receiver}\nIP address: {self.ip_address}')
+        return f'Receiver: {self.receiver}\nIP address: {self.ip_address}'
 
 
 class HelpScreen(ModalScreen):
@@ -132,7 +136,6 @@ class MsgsPerSecond(Sparkline):
         self.data = self.samples
 
     def update_graph(self) -> None:
-        self.log(self.app)
         self.data = self.data[-59:] + [len(self.app.message_count)]
         self.app.message_count = []
 
@@ -168,20 +171,13 @@ class MainScreen(Screen):
         status.border_title='Status'
 
         shell_command = (
-            '/home/jason/PycharmProjects/multimon-ng/build/multimon-ng '
-            '-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -f alpha '
+            self.app.mmng_binary +
+            ' -a POCSAG512 -a POCSAG1200 -a POCSAG2400 -f alpha '
             '-t raw -u -q -b1 --timestamp -p -'
         )
         self.log('About to start multimon')
         self.stream_subprocess(shell_command)
         self.log('AFTER: About to start multimon')
-
-        network_loop = asyncio.get_running_loop()
-        transport, protocol = await network_loop.create_datagram_endpoint(
-            lambda: UDPHandler(self, network_loop),
-            local_addr=('::', 8888)
-        )
-        network_loop.create_task(protocol.idle_task())
 
     @work(exclusive=True)
     async def stream_subprocess(self, command):
@@ -193,6 +189,14 @@ class MainScreen(Screen):
             stdout=PIPE,
             stderr=PIPE
         )
+        self.log('*** process is assigned')
+
+        network_loop = asyncio.get_running_loop()
+        transport, protocol = await network_loop.create_datagram_endpoint(
+            lambda: UDPHandler(self, network_loop),
+            local_addr=('::', 8888)
+        )
+        network_loop.create_task(protocol.idle_task())
 
         # Stream stdout asynchronously
         async for line in self.read_process_output(self.process.stdout):
@@ -219,8 +223,6 @@ class MainScreen(Screen):
 
     async def on_resize(self, event: events.Resize) -> None:
         self.current_width = event.size.width
-        log = self.screen.query_one('#log')
-        table = self.screen.query_one('#messages')
 
     async def watch_show_vertical_scrollbar(self) -> None:
         log = self.screen.query_one('#log')
@@ -258,6 +260,10 @@ class MainScreen(Screen):
 
 
 class Pocsag(App):
+    def __init__(self, mmng_binary: str) -> None:
+        self.mmng_binary = mmng_binary
+        super().__init__()
+
     CSS_PATH = "pocsag.tcss"
 
     SCREENS = {"help": HelpScreen}
@@ -284,83 +290,15 @@ class Pocsag(App):
 
 
 
-def process_line(line, sendFunctionCode=False, useTimestamp=False, EASOpts=None, frag=None):
-    address = ''
-    message = False
-    trimMessage = ''
-    datetime_val = None
+@click.command()
+@click.option('--mmng-binary', '-m', required=False, default='multimon-ng', help='Path to multimon-ng binary')
+@click.version_option(version=__version__)
+def main(mmng_binary):
+    if not shutil.which(mmng_binary):
+        click.echo('multimon-ng binary not found!', err=True)
+        sys.exit(1)
 
-    # POCSAG parsing
-    if re.search(r'POCSAG(\d+): Address:', line):
-        address = re.search(r'POCSAG(\d+): Address:(.*?)Function', line).group(2).strip()
-
-        if sendFunctionCode:
-            address += re.search(r'POCSAG(\d+): Address:(.*?)Function: (\d)', line).group(3)
-
-        if 'Alpha:' in line:
-            message = re.search(r'Alpha:(.*?)$', line).group(1).strip()
-
-            if useTimestamp:
-                if re.search(r'\d{2} \w+ \d{4} \d{2}:\d{2}:\d{2}', message):
-                    timeString = re.search(r'\d{2} \w+ \d{4} \d{2}:\d{2}:\d{2}', message).group(0)
-                    datetime_val = parse_datetime(timeString, '%d %B %Y %H:%M:%S')
-                    if datetime_val:
-                        message = re.sub(r'\d{2} \w+ \d{4} \d{2}:\d{2}:\d{2}', '', message)
-                elif re.search(r'\d+-\d+-\d+ \d{2}:\d{2}:\d{2}', message):
-                    timeString = re.search(r'\d+-\d+-\d+ \d{2}:\d{2}:\d{2}', message).group(0)
-                    datetime_val = parse_datetime(timeString, '%Y-%m-%d %H:%M:%S')
-                    if datetime_val:
-                        message = re.sub(r'\d+-\d+-\d+ \d{2}:\d{2}:\d{2}', '', message)
-
-            trimMessage = re.sub(r'<[A-Za-z]{3}>', '', message).replace('Ä', '[').replace('Ü', ']').strip()
-
-        elif 'Numeric:' in line:
-            message = re.search(r'Numeric:(.*?)$', line).group(1).strip()
-            trimMessage = re.sub(r'<[A-Za-z]{3}>', '', message).replace('Ä', '[').replace('Ü', ']').strip()
-
-    # FLEX parsing
-    elif re.search(r'FLEX[:|]', line):
-        address = re.search(r'FLEX[:|] ?.*?[\[|](\d*?)[\]| ]', line).group(1).strip()
-
-        if useTimestamp:
-            if re.search(r'FLEX[:|] ?\d{2} \w+ \d{4} \d{2}:\d{2}:\d{2}', line):
-                timeString = re.search(r'\d{2} \w+ \d{4} \d{2}:\d{2}:\d{2}', line).group(0)
-                datetime_val = parse_datetime(timeString, '%d %B %Y %H:%M:%S')
-            elif re.search(r'FLEX[:|] ?\d+-\d+-\d+ \d{2}:\d{2}:\d{2}', line):
-                timeString = re.search(r'\d+-\d+-\d+ \d{2}:\d{2}:\d{2}', line).group(0)
-                datetime_val = parse_datetime(timeString, '%Y-%m-%d %H:%M:%S')
-
-        if re.search(r'([ |]ALN[ |]|[ |]GPN[ |]|[ |]NUM[ |])', line):
-            message = re.search(r'FLEX[:|].*[|\[][0-9 ]*[|\]] ?...[ |](.+)', line).group(1).strip()
-
-            if re.search(r'[ |][0-9]{4}\/[0-9]\/F\/.[ |]', line):
-                frag[address] = message
-                message = False
-                trimMessage = ''
-            elif re.search(r'[ |][0-9]{4}\/[0-9]\/C\/.[ |]', line):
-                trimMessage = frag[address] + message
-                del frag[address]
-            elif re.search(r'[ |][0-9]{4}\/[0-9]\/K\/.[ |]', line):
-                trimMessage = message
-            else:
-                trimMessage = message
-
-    # EAS parsing
-    elif re.search(r'(EAS[:|]|ZCZC-)', line):
-        decodedMessage = SAME.decode(line, EASOpts.excludeEvents, EASOpts.includeFIPS)
-        if decodedMessage:
-            if EASOpts.addressAddType:
-                address = f"{decodedMessage['LLLL-ORG']}-{decodedMessage['type']}"
-            else:
-                address = decodedMessage["LLLL-ORG"]
-            message = decodedMessage
-            trimMessage = decodedMessage["MESSAGE"]
-            datetime_val = int(time.time())  # Current time as Unix timestamp
-
-    return address, message, trimMessage, datetime_val
-
-def main():
-    Pocsag().run()
+    Pocsag(mmng_binary).run()
 
 if __name__ == "__main__":
     main()
