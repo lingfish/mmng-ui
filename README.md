@@ -73,7 +73,7 @@ The mouse will also work!
 
 Here's what a screen full of decodes might look like:
 
-![screenshot](docs/working screen.png)
+![screenshot](docs/working%20screen.png)
 
 ## Supported Python versions
 
