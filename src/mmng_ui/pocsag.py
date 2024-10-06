@@ -1,3 +1,4 @@
+import shlex
 import shutil
 import sys
 import asyncio
@@ -35,6 +36,7 @@ class Status:
 
     receiver: str
     ip_address: str
+    json_mode: bool
 
     def __repr__(self):
         return f'Receiver: {self.receiver}\nIP address: {self.ip_address}'
@@ -54,11 +56,7 @@ class UDPHandler(asyncio.DatagramProtocol):
         self.status.receiver = 'Closed'
 
     def datagram_received(self, data, addr):
-        # log = self.pocsag.query_one('#log')
-        # message = data.decode()
-        # log.write(f"Received data from {addr}")
         self.last_activity_time = self.loop.time()
-        # self.status.receiver = 'receiving'
         self.status.ip_address = addr[0]
         self.app.process.stdin.write(data)
         self.app.process.stdin.drain()
@@ -74,9 +72,10 @@ class StatusWidget(Widget):
 
     receiver = reactive('[dark_red]Not connected[/]')
     ip_address = reactive('[wheat4]None[/]')
+    json_mode = reactive('[wheat4]Unknown[/]')
 
     def render(self) -> str:
-        return f'Receiver: {self.receiver}\nIP address: {self.ip_address}'
+        return f'Receiver: {self.receiver}\nIP address: {self.ip_address}\nJSON mode: {self.json_mode}'
 
 
 class HelpScreen(ModalScreen):
@@ -92,9 +91,37 @@ class HelpScreen(ModalScreen):
 
 This is a TUI utility to decode and see POCSAG messages.
 
-## Objective
+mmng-ui will listen on a chosen UDP port for raw streams from software like SDR++, use multimon-ng to decode it, and
+show you POCSAG messages in a wonderful text interface.
 
-blah.
+## Usage
+
+Alpha POCSAG messages will display in the top pane.  The bottom pane will show the raw output from `multimon-ng`,
+as well as any errors or issues with decoding.
+
+The status panel shows any incoming connections.  Receiver will transition between the following states:
+
+| Receiver state | Description                                     |
+|----------------|-------------------------------------------------|
+| idle           | No UDP traffic yet seen, or seen in 5 seconds   |
+| receiving      | Actively receiving a decode from `multimon-ng`  |
+| waiting        | Traffic is coming in, but nothing to be decoded |
+
+Just below the status panel is a sparkline -- this updates on each decode, and reflects character length of said
+decode.
+
+Underneath the log window in another sparkline, and this shows messages per second, for the last minute.
+
+The footer shows available keyboard choices to quit the app, show a help screen, and clear all logging panes.
+
+The mouse will also work!
+
+## JSON mode
+
+`mmng-ui` will attempt to auto-detect the output format from `multimon-ng`, and if it looks like JSON, it'll use it.
+
+JSON output isn't yet in `multimon-ng`, but I have a working
+fork [here](https://github.com/lingfish/multimon-ng/tree/add-json).
 
 [//]: # (README.md ends here)"""
         yield Markdown(text, id='help')
@@ -115,7 +142,6 @@ class MsgsPerSecond(Sparkline):
         self.app.message_count = []
 
 
-# class Pocsag(App):
 class MainScreen(Screen):
     def compose(self):
         yield Header()
@@ -147,21 +173,27 @@ class MainScreen(Screen):
 
         self.parse_line = ParseLine()
 
-        shell_command = (
-            self.app.mmng_binary +
-            ' -a POCSAG512 -a POCSAG1200 -a POCSAG2400 -f alpha '
-            '-t raw -u -q --timestamp -p --json -'
-        )
+        # Run multimon-ng, grab version and JSON support
+        mmng_help_process = await asyncio.create_subprocess_exec(self.app.mmng_binary, '-h', stderr=PIPE)
+        mmng_help = await mmng_help_process.stderr.read()
+        await mmng_help_process.wait()
+        mmng_text = mmng_help.decode()
+        json_capable = '--json' in mmng_text
+        log.write(f'multimon-ng version: {mmng_text.splitlines()[0]}')
+        log.write(f'JSON capable: {json_capable}')
+
+        mmng_args = f'-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -f alpha -t raw -u -q --timestamp -p {"--json" if json_capable else ""} -'
         self.log('About to start multimon')
-        self.stream_subprocess(shell_command)
+        self.stream_subprocess(self.app.mmng_binary, mmng_args)
         self.log('AFTER: About to start multimon')
 
     @work(exclusive=True)
-    async def stream_subprocess(self, command):
+    async def stream_subprocess(self, command, args):
         """Stream output from a subprocess and post it using post_message."""
         self.log('   in stream_subprocess')
-        self.process = await asyncio.create_subprocess_shell(
+        self.process = await asyncio.create_subprocess_exec(
             command,
+            *shlex.split(args),
             stdin=PIPE,
             stdout=PIPE,
             stderr=PIPE
@@ -209,16 +241,15 @@ class MainScreen(Screen):
         """Handle OutputMessage to update UI components."""
         log = self.screen.query_one('#log')
         table = self.screen.query_one('#messages')
+        status = self.screen.query_one('#status')
 
         # Process the output as it becomes available
         log.write(f'[bold magenta]multimon-ng: {message.output}')
-        sendFunctionCode = True  # Change as needed
-        useTimestamp = True       # Change as needed
-        EASOpts = None            # Modify based on options needed for EAS decoding
-        frag = {}
 
         # result = PocsagMessage()
         result, json_detected = self.parse_line.parse(message.output)
+
+        status.json_mode = json_detected
 
         self.log('Adding a row')
         if message:

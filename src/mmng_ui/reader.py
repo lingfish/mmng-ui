@@ -40,6 +40,7 @@ class ParseLine:
     def parse(self, line: str) -> tuple[Moment, Moment | None, str, str]:
         result = PocsagMessage()
         message: str | None = None
+        trim_message: str | None = None
         time_string: str | None = None
         json_line: Any | None = None
         timestamp: Moment = None
