@@ -1,19 +1,12 @@
-import re
 import shutil
 import sys
-from collections import deque
-from datetime import datetime
-import time
 import asyncio
 from subprocess import PIPE
 from dataclasses import dataclass
-from time import sleep
+import json
 
 import click
-import moment
-from rich import inspect
 from rich.text import Text
-from rich.table import Table
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
 from textual.reactive import reactive
@@ -24,28 +17,10 @@ from textual import work, events
 from textual.message import Message
 from textual.binding import Binding
 from textual.actions import SkipAction
-from textual.worker import Worker, WorkerState
 
-from mmng_ui.reader import parse_line
+from mmng_ui.reader import ParseLine, PocsagMessage
 from mmng_ui._version import __version__
 
-
-def parse_datetime(time_string: str, format_string: str) -> int:
-    """
-    Parse a datetime and return, I dunno.
-
-    :param time_string:
-    :type time_string:
-    :param format_string:
-    :type format_string:
-    :return:
-    :rtype:
-    """
-    try:
-        dt_obj = datetime.strptime(time_string, format_string)
-        return int(time.mktime(dt_obj.timetuple()))
-    except ValueError:
-        return None
 
 
 @dataclass
@@ -167,13 +142,15 @@ class MainScreen(Screen):
         table.add_column('Message', key='message')
         table.cursor_type = 'none'
         table.border_title ='POCSAG messages'
-        log.border_title='Log window'
-        status.border_title='Status'
+        log.border_title = 'Log window'
+        status.border_title = 'Status'
+
+        self.parse_line = ParseLine()
 
         shell_command = (
             self.app.mmng_binary +
             ' -a POCSAG512 -a POCSAG1200 -a POCSAG2400 -f alpha '
-            '-t raw -u -q -b1 --timestamp -p -'
+            '-t raw -u -q --timestamp -p --json -'
         )
         self.log('About to start multimon')
         self.stream_subprocess(shell_command)
@@ -239,10 +216,13 @@ class MainScreen(Screen):
         useTimestamp = True       # Change as needed
         EASOpts = None            # Modify based on options needed for EAS decoding
         frag = {}
-        current_time, timestamp, address, message = parse_line(message.output)
+
+        # result = PocsagMessage()
+        result, json_detected = self.parse_line.parse(message.output)
+
         self.log('Adding a row')
         if message:
-            table.add_row(str(timestamp.strftime('%H:%M:%S')), Text(address, justify='right'), message, height=None)
+            table.add_row(str(result.current_time.strftime('%H:%M:%S')), Text(result.address, justify='right'), result.trim_message, height=None)
         else:
             log.write('WARNING: No valid message decoded from multimon-ng')
         try:

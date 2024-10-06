@@ -39,9 +39,18 @@ You can of course also install it using classic virtualenvs.
 
 ## How to use it
 
+Run `mmng-ui --help` for options:
+
+```bash
+Options:
+  -m, --mmng-binary TEXT  Path to multimon-ng binary
+  --version               Show the version and exit.
+  --help                  Show this message and exit.
+```
+
 Run `mmng-ui`, and you'll be greeted with this screen:
 
-![screenshot](docs/initial%20screen.png)
+![screenshot](https://raw.githubusercontent.com/lingfish/mmng-ui/refs/heads/main/docs/initial%20screen.png)
 
 Notice in the status pane, it says "Receiver: idle" -- it is now listening for UDP packets sent to the default port
 of 8888.
@@ -69,11 +78,18 @@ The footer shows available keyboard choices to quit the app, show a help screen,
 
 The mouse will also work!
 
+### JSON mode
+
+`mmng-ui` will attempt to auto-detect the output format from `multimon-ng`, and if it looks like JSON, it'll use it.
+
+JSON output isn't yet in `multimon-ng`, but I have a working
+fork [here](https://github.com/lingfish/multimon-ng/tree/add-json).
+
 ## Example screenshot
 
 Here's what a screen full of decodes might look like:
 
-![screenshot](docs/working%20screen.png)
+![screenshot](https://raw.githubusercontent.com/lingfish/mmng-ui/refs/heads/main/docs/working%20screen.png)
 
 ## Supported Python versions
 
