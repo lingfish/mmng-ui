@@ -203,7 +203,7 @@ class MainScreen(Screen):
         network_loop = asyncio.get_running_loop()
         transport, protocol = await network_loop.create_datagram_endpoint(
             lambda: UDPHandler(self, network_loop),
-            local_addr=('::', 8888)
+            local_addr=('::', self.app.port)
         )
         network_loop.create_task(protocol.idle_task())
 
@@ -271,8 +271,9 @@ class MainScreen(Screen):
 
 
 class Pocsag(App):
-    def __init__(self, mmng_binary: str) -> None:
+    def __init__(self, mmng_binary: str, port:int) -> None:
         self.mmng_binary = mmng_binary
+        self.port = port
         super().__init__()
 
     CSS_PATH = "pocsag.tcss"
@@ -303,13 +304,14 @@ class Pocsag(App):
 
 @click.command()
 @click.option('--mmng-binary', '-m', required=False, default='multimon-ng', help='Path to multimon-ng binary')
+@click.option('--port', '-p', required=False, type=int, default=8888, help='Port to listen on')
 @click.version_option(version=__version__)
-def main(mmng_binary):
+def main(mmng_binary, port):
     if not shutil.which(mmng_binary):
         click.echo('multimon-ng binary not found!', err=True)
         sys.exit(1)
 
-    Pocsag(mmng_binary).run()
+    Pocsag(mmng_binary, port).run()
 
 if __name__ == "__main__":
     main()
