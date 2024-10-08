@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from json import JSONDecodeError
 from typing import Any
 
 import moment
@@ -37,7 +38,7 @@ class ParseLine:
     use_timestamp: bool = True
     json_detected: bool | None = None
 
-    def parse(self, line: str) -> tuple[Moment, Moment | None, str, str]:
+    def parse(self, line: str) -> tuple[PocsagMessage, bool]:
         result = PocsagMessage()
         message: str | None = None
         trim_message: str | None = None
@@ -54,9 +55,15 @@ class ParseLine:
 
         if self.json_detected:
             if not json_line:
-                json_line = json.loads(line)
-            result.trim_message = re.sub(r'<[A-Za-z]{3}>', '', json_line.get('alpha', '')).replace('Ä', '[').replace('Ü', ']').strip() or ''
-            result.address = str(json_line['address']) or ''
+                try:
+                    json_line = json.loads(line)
+                except JSONDecodeError:
+                    result.trim_message = f'ERROR: multimon-ng returned non-JSON: {line}'
+                    result.address = ''
+            else:
+                result.trim_message = re.sub(r'<[A-Za-z]{3}>', '', json_line.get('alpha', '')).replace('Ä', '[').replace('Ü', ']').strip() or ''
+                result.address = str(json_line['address']) or ''
+
             return result, self.json_detected
 
         else:

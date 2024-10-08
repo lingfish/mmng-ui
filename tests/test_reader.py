@@ -14,7 +14,6 @@ def sample_json_data():
 
 def test_POCSAG_parse_line(sample_data):
     parse_line = ParseLine()
-    result = PocsagMessage()
     result, json_detected = parse_line.parse(sample_data)
     assert result.address == '1622020'
     assert result.timestamp == moment.date(2024, 9, 23, 12, 38, 00)
@@ -23,10 +22,16 @@ def test_POCSAG_parse_line(sample_data):
 
 def test_parse_line_json(sample_json_data):
     parse_line = ParseLine()
-    result = PocsagMessage()
     result, json_detected = parse_line.parse(sample_json_data)
     assert result.address == '1920312'
     assert result.trim_message == 'Time Critical Incident - Clear ASAP - or advise Comms of Time to Clear (Via Radio)'
+    assert json_detected is True
+
+def test_parse_line_invalid_not_json():
+    parse_line = ParseLine(json_detected=True)
+    result, json_detected = parse_line.parse('Jibberish that is not JSON')
+    assert result.address == ''
+    assert result.trim_message == 'ERROR: multimon-ng returned non-JSON: Jibberish that is not JSON'
     assert json_detected is True
 
 

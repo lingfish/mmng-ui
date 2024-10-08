@@ -39,14 +39,7 @@ You can of course also install it using classic virtualenvs.
 
 ## How to use it
 
-Run `mmng-ui --help` for options:
-
-```bash
-Options:
-  -m, --mmng-binary TEXT  Path to multimon-ng binary
-  --version               Show the version and exit.
-  --help                  Show this message and exit.
-```
+See `mmng-ui --help` for CLI options.
 
 Run `mmng-ui`, and you'll be greeted with this screen:
 
