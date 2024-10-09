@@ -42,6 +42,8 @@ class Status:
         return f'Receiver: {self.receiver}\nIP address: {self.ip_address}'
 
 class UDPHandler(asyncio.DatagramProtocol):
+    """Handle UDP traffic"""
+
     def __init__(self, app, loop):
         self.app = app
         self.loop = loop
@@ -62,6 +64,7 @@ class UDPHandler(asyncio.DatagramProtocol):
         self.app.process.stdin.drain()
 
     async def idle_task(self):
+        """This updates the things in the status pane."""
         while True:
             if self.loop.time() - self.last_activity_time > 5:
                 self.status.receiver = '[wheat4]idle[/]'
@@ -129,6 +132,8 @@ fork [here](https://github.com/lingfish/multimon-ng/tree/add-json).
 
 
 class MsgsPerSecond(Sparkline):
+    """Calculate/update the messages per second sparkline."""
+
     def __init__(self, samples=[0]*60, **kwargs):
         super().__init__(**kwargs)
         self.samples = samples
@@ -209,6 +214,7 @@ class MainScreen(Screen):
 
         # Stream stdout asynchronously
         async for line in self.read_process_output(self.process.stdout):
+            self.log(f'Raw output from multimon: {line}')
             self.post_message(OutputMessage(line))
             self.set_timer(1, lambda: setattr(self.query_one('#status'), 'receiver', '[dark_green]waiting[/]'))
             self.query_one('#spark').data = self.query_one('#spark').data[-9:] + [len(line)]
@@ -232,10 +238,12 @@ class MainScreen(Screen):
 
     async def on_resize(self, event: events.Resize) -> None:
         self.current_width = event.size.width
+        table = self.screen.query_one('#messages')
+        self.recalc_width(table)
 
     async def watch_show_vertical_scrollbar(self) -> None:
-        log = self.screen.query_one('#log')
-        log.write('scrollbar appeared!')
+        table = self.screen.query_one('#messages')
+        self.recalc_width(table)
 
     async def on_output_message(self, message: OutputMessage):
         """Handle OutputMessage to update UI components."""
@@ -243,31 +251,38 @@ class MainScreen(Screen):
         table = self.screen.query_one('#messages')
         status = self.screen.query_one('#status')
 
+        self.log(f'RECEIVED EVENT: {message}')
         # Process the output as it becomes available
         log.write(f'[bold magenta]multimon-ng: {message.output}')
 
-        # result = PocsagMessage()
         result, json_detected = self.parse_line.parse(message.output)
+        self.log(f'result: {result}')
 
         status.json_mode = json_detected
 
         self.log('Adding a row')
         if message:
-            table.add_row(str(result.current_time.strftime('%H:%M:%S')), Text(result.address, justify='right'), result.trim_message, height=None)
+            table.add_row(str(result.current_time.strftime('%H:%M:%S')), Text(result.address, justify='right'),
+                          result.trim_message, height=None)
         else:
             log.write('WARNING: No valid message decoded from multimon-ng')
-        try:
-            table.action_scroll_bottom()
-        except SkipAction:
-            pass
 
-        message_col_width = table.columns['time'].get_render_width(table) + table.columns['address'].get_render_width(table)
+        self.recalc_width(table)
+
+    def recalc_width(self, table) -> None:
+        message_col_width = table.columns['time'].get_render_width(table) + table.columns['address'].get_render_width(
+            table)
         if table.show_vertical_scrollbar:
             scroll_padding = table.styles.scrollbar_size_vertical
         else:
             scroll_padding = 0
-        table.columns["message"].width = (table.size.width - message_col_width) - (2 * table.cell_padding) - scroll_padding
+        table.columns["message"].width = (table.size.width - message_col_width) - (
+                    2 * table.cell_padding) - scroll_padding
         table.columns["message"].auto_width = False
+        try:
+            table.action_scroll_bottom()
+        except SkipAction:
+            pass
 
 
 class Pocsag(App):
@@ -315,4 +330,3 @@ def main(mmng_binary, port):
 
 if __name__ == "__main__":
     main()
-

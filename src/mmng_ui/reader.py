@@ -60,9 +60,9 @@ class ParseLine:
                 except JSONDecodeError:
                     result.trim_message = f'ERROR: multimon-ng returned non-JSON: {line}'
                     result.address = ''
-            else:
-                result.trim_message = re.sub(r'<[A-Za-z]{3}>', '', json_line.get('alpha', '')).replace('Ä', '[').replace('Ü', ']').strip() or ''
-                result.address = str(json_line['address']) or ''
+                    return result, self.json_detected
+            result.trim_message = re.sub(r'<[A-Za-z]{3}>', '', json_line.get('alpha', '')).replace('Ä', '[').replace('Ü', ']').strip() or ''
+            result.address = str(json_line['address']) or ''
 
             return result, self.json_detected
 
@@ -94,7 +94,7 @@ class ParseLine:
                                         message = message.replace(time_string, '').strip()
                                     except ValueError:
                                         raise
-                                        pass
+                                        # pass
 
                             # Handle date formats like 'YYYY-MM-DD HH:mm:ss'
                             elif re.search(r'\d+-\d+-\d+ \d{2}:\d{2}:\d{2}', line):
@@ -106,7 +106,7 @@ class ParseLine:
                                         message = message.replace(time_string, '').strip()
                                     except ValueError:
                                         raise
-                                        pass
+                                        # pass
 
                         # Clean the message
                         trim_message = re.sub(r'<[A-Za-z]{3}>', '', message).replace('Ä', '[').replace('Ü', ']').strip()
