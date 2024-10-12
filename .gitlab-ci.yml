@@ -34,6 +34,9 @@ test:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
+      junit: report.xml
+    paths:
+      - report.xml
   coverage: '/TOTAL.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
 
 build:
