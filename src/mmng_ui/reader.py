@@ -122,7 +122,7 @@ class ParseLine:
             elif re.search(r'FLEX[:|]', line):
                 address_match = re.search(r'FLEX[:|] ?.*?[\[|](\d*?)[\]| ]', line)
                 if address_match:
-                    address = address_match.group(1).trim()
+                    address = address_match.group(1).strip()
 
                 # Handle timestamps within FLEX
                 if self.use_timestamp:
@@ -155,8 +155,12 @@ class ParseLine:
                             frag[address] = message
                             trim_message = ''
                         elif re.search(r'[ |][0-9]{4}\/[0-9]\/C\/.[ |]', line):
-                            trim_message = frag[address] + message
-                            del frag[address]
+                            try:
+                                trim_message = frag[address] + message
+                                del frag[address]
+                            except KeyError:
+                                # We've seen a fragment without the starting frag, treat as final
+                                trim_message = message
                         else:
                             trim_message = message
 
