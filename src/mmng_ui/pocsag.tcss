@@ -60,7 +60,7 @@
     column-span: 2;
 }
 
-HelpScreen {
+HelpScreen, FilterScreen {
     align: center middle;
 }
 
@@ -74,4 +74,9 @@ HelpScreen {
     /* border: thick $background 80%; */
     border: thick solid yellow;
     background: $surface;
+}
+
+#filter {
+    width: 50%;
+    border: thick solid yellow;
 }

@@ -2,22 +2,28 @@ import shlex
 import shutil
 import sys
 import asyncio
+from operator import itemgetter
+from re import search
 from subprocess import PIPE
 from dataclasses import dataclass
 import json
+from typing import Callable, Any, Self
 
 import click
+from rich import inspect
 from rich.text import Text
+from textual._two_way_dict import TwoWayDict
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
 from textual.widget import Widget
-from textual.widgets import Header, Static, RichLog, DataTable, Footer, HelpPanel, Markdown, Sparkline
-from textual import work, events
+from textual.widgets import Header, Static, RichLog, DataTable, Footer, HelpPanel, Markdown, Sparkline, Input
+from textual import work, events, on
 from textual.message import Message
 from textual.binding import Binding
 from textual.actions import SkipAction
+from textual.widgets._data_table import ColumnKey
 
 from mmng_ui.reader import ParseLine, PocsagMessage
 from mmng_ui._version import __version__
@@ -130,6 +136,18 @@ fork [here](https://github.com/lingfish/multimon-ng/tree/add-json).
         yield Markdown(text, id='help')
 
 
+class FilterScreen(ModalScreen[str]):
+    """Screen with a dialog to quit."""
+
+    BORDER_TITLE = 'Filter messages'
+
+    def compose(self) -> ComposeResult:
+        yield Input(placeholder='Enter a filter here', id='filter')
+
+    @on(Input.Submitted)
+    def handle_filter(self, event: Input.Submitted) -> None:
+        self.dismiss(event.value)
+
 
 class MsgsPerSecond(Sparkline):
     """Calculate/update the messages per second sparkline."""
@@ -147,11 +165,74 @@ class MsgsPerSecond(Sparkline):
         self.app.message_count = []
 
 
+class DataTableFilter(DataTable):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def filter(
+            self,
+            *columns: ColumnKey | str,
+            search: str,
+            reverse: bool = False,
+    ) -> Self:
+        """Sort the rows in the `DataTable` by one or more column keys or a
+        key function (or other callable). If both columns and a key function
+        are specified, only data from those columns will sent to the key function.
+
+        Args:
+            columns: One or more columns to sort by the values in.
+            key: A function (or other callable) that returns a key to
+                use for sorting purposes.
+            reverse: If True, the sort order will be reversed.
+
+        Returns:
+            The `DataTable` instance.
+        """
+
+        # def key_wrapper(row: tuple[RowKey, dict[ColumnKey | str, CellType]]) -> Any:
+        #     _, row_data = row
+        #     if columns:
+        #         result = itemgetter(*columns)(row_data)
+        #     else:
+        #         result = tuple(row_data.values())
+        #     if key is not None:
+        #         return key(result)
+        #     return result
+
+        def equals(row):
+            _, row_data = row
+            col = itemgetter(*columns)(row_data)
+            self.log(f'{col}: {search in col}')
+            return search in col
+
+        self.log(f'ORIGINAL: {self._data.items()}')
+        c = self._data.copy()
+        for k, v in c.items():
+            # _, row_data = v
+            self.log(f'KEY: {k}\nVAL: {v}')
+            col = itemgetter(*columns)(v)
+            if search not in col:
+                self.log('WOULD DELETE')
+                self.remove_row(k)
+        # for x in o:
+        #     self.log(f'FILTER ITEM: {x}')
+        # ordered_rows = sorted(
+        #     self._data.items(),
+        #     key=key_wrapper,
+        #     reverse=reverse,
+        # )
+        # self.rows = new
+        # self._data = new
+        # self.log(f'UPDATED: {self._data.items()}')
+        # self._update_count += 1
+        # self.refresh()
+        return self
+
 class MainScreen(Screen):
     def compose(self):
         yield Header()
         with Container(id="app-grid"):
-            yield DataTable(id='messages')
+            yield DataTableFilter(id='messages')
             yield RichLog(id='log', highlight=True, markup=True)
             # yield StatusWidget(id='status')
             with Container(id="status-container"):
@@ -187,7 +268,7 @@ class MainScreen(Screen):
         log.write(f'multimon-ng version: {mmng_text.splitlines()[0]}')
         log.write(f'JSON capable: {json_capable}')
 
-        mmng_args = f'-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -f alpha -t raw -u -q --timestamp -p {"--json" if json_capable else ""} -'
+        mmng_args = f'-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -a FLEX -f alpha -t raw -u -q --timestamp -p {"--json" if json_capable else ""} -'
         self.log('About to start multimon')
         self.stream_subprocess(self.app.mmng_binary, mmng_args)
         self.log('AFTER: About to start multimon')
@@ -289,11 +370,12 @@ class Pocsag(App):
     def __init__(self, mmng_binary: str, port:int) -> None:
         self.mmng_binary = mmng_binary
         self.port = port
+        self.filter: str = None
         super().__init__()
 
     CSS_PATH = "pocsag.tcss"
 
-    SCREENS = {"help": HelpScreen}
+    SCREENS = {"help": HelpScreen, "filter": FilterScreen}
 
     BINDINGS = [
         Binding(key="q", action="quit", description="Quit the app"),
@@ -304,6 +386,7 @@ class Pocsag(App):
             key_display="?",
         ),
         Binding(key='c', action='clear_screen', description='Clear all panes'),
+        Binding(key='/', action='filter', description='Filter the messages'),
     ]
 
     message_count = []
@@ -312,9 +395,19 @@ class Pocsag(App):
         self.push_screen(MainScreen())
 
     def action_clear_screen(self) -> None:
-        self.screen.query_one(DataTable).clear()
+        self.screen.query_one('#messages').clear()
         self.screen.query_one('#log').clear()
 
+    def action_filter(self) -> None:
+        def check_filter(filter: str | None) -> None:
+            """Called when FilterScreen is dismissed."""
+            if filter:
+                table = self.screen.query_one('#messages')
+                self.log(filter)
+                self.filter = filter
+                table.filter('message', search=self.filter)
+
+        self.push_screen(FilterScreen(), check_filter)
 
 
 @click.command()

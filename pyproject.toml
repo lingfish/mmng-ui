@@ -36,3 +36,9 @@ local_scheme = "no-local-version"
 
 [tool.pylint]
 max-line-length = 120
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "single"
