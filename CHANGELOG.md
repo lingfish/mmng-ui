@@ -1,3 +1,13 @@
+## 1.0.6 (2024-12-09)
+
+### fixed (1 change)
+
+- [FLEX fixes.](lucid/mmng-ui@77242a8ea0658def57cc63a1ddac84200379378c)
+
+### added (1 change)
+
+- [Add a filter feature.](lucid/mmng-ui@da2c8ee3f4a48ab0b0ece98693f7ec2b7132f391)
+
 ## 1.0.5 (2024-10-09)
 
 ### fixed (1 change)
