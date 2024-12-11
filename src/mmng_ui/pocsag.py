@@ -268,7 +268,7 @@ class MainScreen(Screen):
         log.write(f'multimon-ng version: {mmng_text.splitlines()[0]}')
         log.write(f'JSON capable: {json_capable}')
 
-        mmng_args = f'-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -a FLEX -f alpha -t raw -u -q --timestamp -p {"--json" if json_capable else ""} -'
+        mmng_args = f'-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -a FLEX -a FLEX_NEXT -f alpha -t raw -u -q --timestamp -p {"--json" if json_capable else ""} -'
         self.log('About to start multimon')
         self.stream_subprocess(self.app.mmng_binary, mmng_args)
         self.log('AFTER: About to start multimon')
