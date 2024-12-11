@@ -1,3 +1,9 @@
+## 1.0.7 (2024-12-11)
+
+### added (1 change)
+
+- [Add FLEX_NEXT decoding to multimon-ng.](lucid/mmng-ui@186e0c198a5ca266519ae0cf56a1cf85371c2291)
+
 ## 1.0.6 (2024-12-09)
 
 ### fixed (1 change)
