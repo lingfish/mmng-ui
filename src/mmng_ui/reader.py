@@ -172,5 +172,5 @@ class ParseLine:
 
             result.timestamp = timestamp or None
             result.address = str(address)
-            result.trim_message = trim_message
+            result.trim_message = trim_message or None
             return result, self.json_detected

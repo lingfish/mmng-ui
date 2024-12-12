@@ -33,6 +33,7 @@ from mmng_ui._version import __version__
 @dataclass
 class OutputMessage(Message, bubble=False):
     """Custom message class to handle subprocess output."""
+
     output: str
 
 
@@ -152,7 +153,7 @@ class FilterScreen(ModalScreen[str]):
 class MsgsPerSecond(Sparkline):
     """Calculate/update the messages per second sparkline."""
 
-    def __init__(self, samples=[0]*60, **kwargs):
+    def __init__(self, samples=[0] * 60, **kwargs):
         super().__init__(**kwargs)
         self.samples = samples
 
@@ -170,10 +171,10 @@ class DataTableFilter(DataTable):
         super().__init__(**kwargs)
 
     def filter(
-            self,
-            *columns: ColumnKey | str,
-            search: str,
-            reverse: bool = False,
+        self,
+        *columns: ColumnKey | str,
+        search: str,
+        reverse: bool = False,
     ) -> Self:
         """Sort the rows in the `DataTable` by one or more column keys or a
         key function (or other callable). If both columns and a key function
@@ -211,7 +212,7 @@ class DataTableFilter(DataTable):
             # _, row_data = v
             self.log(f'KEY: {k}\nVAL: {v}')
             col = itemgetter(*columns)(v)
-            if search not in col:
+            if not col or search not in col:
                 self.log('WOULD DELETE')
                 self.remove_row(k)
         # for x in o:
@@ -231,11 +232,10 @@ class DataTableFilter(DataTable):
 class MainScreen(Screen):
     def compose(self):
         yield Header()
-        with Container(id="app-grid"):
+        with Container(id='app-grid'):
             yield DataTableFilter(id='messages')
             yield RichLog(id='log', highlight=True, markup=True)
-            # yield StatusWidget(id='status')
-            with Container(id="status-container"):
+            with Container(id='status-container'):
                 yield StatusWidget(id='status')
                 yield Sparkline([], id='spark')
         yield MsgsPerSecond(id='msgs-per-second')
@@ -253,7 +253,7 @@ class MainScreen(Screen):
         table.add_column('Address', key='address')
         table.add_column('Message', key='message')
         table.cursor_type = 'none'
-        table.border_title ='POCSAG messages'
+        table.border_title = 'POCSAG messages'
         log.border_title = 'Log window'
         status.border_title = 'Status'
 
@@ -278,18 +278,13 @@ class MainScreen(Screen):
         """Stream output from a subprocess and post it using post_message."""
         self.log('   in stream_subprocess')
         self.process = await asyncio.create_subprocess_exec(
-            command,
-            *shlex.split(args),
-            stdin=PIPE,
-            stdout=PIPE,
-            stderr=PIPE
+            command, *shlex.split(args), stdin=PIPE, stdout=PIPE, stderr=PIPE
         )
         self.log('*** process is assigned')
 
         network_loop = asyncio.get_running_loop()
         transport, protocol = await network_loop.create_datagram_endpoint(
-            lambda: UDPHandler(self, network_loop),
-            local_addr=('::', self.app.port)
+            lambda: UDPHandler(self, network_loop), local_addr=('::', self.app.port)
         )
         network_loop.create_task(protocol.idle_task())
 
@@ -341,10 +336,14 @@ class MainScreen(Screen):
 
         status.json_mode = json_detected
 
-        self.log('Adding a row')
-        if message:
-            table.add_row(str(result.current_time.strftime('%H:%M:%S')), Text(result.address, justify='right'),
-                          result.trim_message, height=None)
+        if message and result.trim_message:
+            self.log('Adding a row')
+            table.add_row(
+                str(result.current_time.strftime('%H:%M:%S')),
+                Text(result.address, justify='right'),
+                result.trim_message,
+                height=None,
+            )
         else:
             log.write('WARNING: No valid message decoded from multimon-ng')
 
@@ -352,14 +351,16 @@ class MainScreen(Screen):
 
     def recalc_width(self, table) -> None:
         message_col_width = table.columns['time'].get_render_width(table) + table.columns['address'].get_render_width(
-            table)
+            table
+        )
         if table.show_vertical_scrollbar:
             scroll_padding = table.styles.scrollbar_size_vertical
         else:
             scroll_padding = 0
-        table.columns["message"].width = (table.size.width - message_col_width) - (
-                    2 * table.cell_padding) - scroll_padding
-        table.columns["message"].auto_width = False
+        table.columns['message'].width = (
+            (table.size.width - message_col_width) - (2 * table.cell_padding) - scroll_padding
+        )
+        table.columns['message'].auto_width = False
         try:
             table.action_scroll_bottom()
         except SkipAction:
@@ -367,23 +368,23 @@ class MainScreen(Screen):
 
 
 class Pocsag(App):
-    def __init__(self, mmng_binary: str, port:int) -> None:
+    def __init__(self, mmng_binary: str, port: int) -> None:
         self.mmng_binary = mmng_binary
         self.port = port
         self.filter: str = None
         super().__init__()
 
-    CSS_PATH = "pocsag.tcss"
+    CSS_PATH = 'pocsag.tcss'
 
-    SCREENS = {"help": HelpScreen, "filter": FilterScreen}
+    SCREENS = {'help': HelpScreen, 'filter': FilterScreen}
 
     BINDINGS = [
-        Binding(key="q", action="quit", description="Quit the app"),
+        Binding(key='q', action='quit', description='Quit the app'),
         Binding(
-            key="question_mark",
+            key='question_mark',
             action="app.push_screen('help')",
-            description="Show help screen",
-            key_display="?",
+            description='Show help screen',
+            key_display='?',
         ),
         Binding(key='c', action='clear_screen', description='Clear all panes'),
         Binding(key='/', action='filter', description='Filter the messages'),
@@ -421,5 +422,6 @@ def main(mmng_binary, port):
 
     Pocsag(mmng_binary, port).run()
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     main()
