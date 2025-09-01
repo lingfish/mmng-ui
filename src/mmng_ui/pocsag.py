@@ -1,18 +1,20 @@
+from __future__ import annotations
+
 import shlex
 import shutil
 import sys
 import asyncio
-from operator import itemgetter
-from re import search
+# from codecs import ignore_errors
+# from itertools import zip_longest
+# from operator import itemgetter
+# from re import search
 from subprocess import PIPE
 from dataclasses import dataclass
-import json
-from typing import Callable, Any, Self
 
 import click
-from rich import inspect
-from rich.text import Text
-from textual._two_way_dict import TwoWayDict
+# from rich import inspect
+from rich.text import Text, TextType
+# from textual._two_way_dict import TwoWayDict
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
 from textual.reactive import reactive
@@ -23,7 +25,7 @@ from textual import work, events, on
 from textual.message import Message
 from textual.binding import Binding
 from textual.actions import SkipAction
-from textual.widgets._data_table import ColumnKey
+# from textual.widgets._data_table import ColumnKey, CellType, RowKey, CellDoesNotExist, Row
 
 from mmng_ui.reader import ParseLine, PocsagMessage
 from mmng_ui._version import __version__
@@ -44,9 +46,11 @@ class Status:
     receiver: str
     ip_address: str
     json_mode: bool
+    charset: str
 
     def __repr__(self):
         return f'Receiver: {self.receiver}\nIP address: {self.ip_address}'
+
 
 class UDPHandler(asyncio.DatagramProtocol):
     """Handle UDP traffic"""
@@ -77,15 +81,17 @@ class UDPHandler(asyncio.DatagramProtocol):
                 self.status.receiver = '[wheat4]idle[/]'
             await asyncio.sleep(1)
 
+
 class StatusWidget(Widget):
     """The status pane."""
 
     receiver = reactive('[dark_red]Not connected[/]')
     ip_address = reactive('[wheat4]None[/]')
     json_mode = reactive('[wheat4]Unknown[/]')
+    charset = reactive('[wheat4]Unknown[/]')
 
     def render(self) -> str:
-        return f'Receiver: {self.receiver}\nIP address: {self.ip_address}\nJSON mode: {self.json_mode}'
+        return f'Receiver: {self.receiver}\nIP address: {self.ip_address}\nJSON mode: {self.json_mode}\nCharset: {self.charset}'
 
 
 class HelpScreen(ModalScreen):
@@ -137,17 +143,17 @@ fork [here](https://github.com/lingfish/multimon-ng/tree/add-json).
         yield Markdown(text, id='help')
 
 
-class FilterScreen(ModalScreen[str]):
-    """Screen with a dialog to quit."""
-
-    BORDER_TITLE = 'Filter messages'
-
-    def compose(self) -> ComposeResult:
-        yield Input(placeholder='Enter a filter here', id='filter')
-
-    @on(Input.Submitted)
-    def handle_filter(self, event: Input.Submitted) -> None:
-        self.dismiss(event.value)
+# class FilterScreen(ModalScreen[str]):
+#     """Screen with a dialog to quit."""
+#
+#     BORDER_TITLE = 'Filter messages'
+#
+#     def compose(self) -> ComposeResult:
+#         yield Input(placeholder='Enter a filter here', id='filter')
+#
+#     @on(Input.Submitted)
+#     def handle_filter(self, event: Input.Submitted) -> None:
+#         self.dismiss(event.value)
 
 
 class MsgsPerSecond(Sparkline):
@@ -166,74 +172,114 @@ class MsgsPerSecond(Sparkline):
         self.app.message_count = []
 
 
-class DataTableFilter(DataTable):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+# class DataTableFilter(DataTable):
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self._unfiltered_data = None
+#         self._unfiltered_rows = None
+#         self._search_term = None
+#         self._search_column = None
+#
+#     async def filter(self, column: str, search: str) -> Self:
+#         self._search_term = search
+#         self._search_column = column
+#         if search == '':
+#             if self._unfiltered_data is not None:
+#                 self._data = self._unfiltered_data
+#                 self._unfiltered_data = None
+#
+#                 self.rows = self._unfiltered_rows
+#                 self._unfiltered_rows = None
+#                 self.border_title = 'POCSAG messages'
+#         else:
+#             if self._unfiltered_data is None:
+#                 self._unfiltered_data = self._data
+#                 self._unfiltered_rows = self.rows
+#
+#             self._data = dict(
+#                 filter(
+#                     lambda x: True if search.lower() in str(x[1][column]).lower() else False,
+#                     self._unfiltered_data.items(),
+#                 )
+#             )
+#             self.rows = {row_key: self._unfiltered_rows[row_key] for row_key in self._data.keys()}
+#             self.border_title = 'POCSAG messages (filter applied)'
+#
+#         self._row_locations = TwoWayDict({key: new_index for new_index, (key, _) in enumerate(self._data.items())})
+#         self._update_count += 1
+#         self._require_update_dimensions = True
+#         self.refresh()
+#         return self
+#
+#     @property
+#     def filter_active(self) -> bool:
+#         return self._search_term != ''
+#
+#     async def filter_refresh(self) -> None:
+#         if self.filter_active:
+#             await self.filter(self._search_column, '')
+#             await self.filter(self._search_column, self._search_term)
+#
+#     def update_cell(
+#         self, row_key: RowKey | str, column_key: ColumnKey | str, value: CellType, *, update_width: bool = False
+#     ) -> None:
+#         if self._unfiltered_data is not None:
+#             try:
+#                 self._unfiltered_data[row_key][column_key] = value
+#             except KeyError:
+#                 raise CellDoesNotExist(f'No cell exists for row_key={row_key!r}, column_key={column_key!r}.') from None
+#
+#         return super().update_cell(row_key, column_key, value, update_width=update_width)
+#
+#     def clear(self, columns: bool = False) -> Self:
+#         self._unfiltered_data = None
+#         self._unfiltered_rows = None
+#         return super().clear(columns)
+#
+#     def add_column(
+#         self, label: TextType, *, width: int | None = None, key: str | None = None, default: CellType | None = None
+#     ) -> ColumnKey:
+#         column_key = super().add_column(label, width=width, key=key, default=default)
+#
+#         if self._unfiltered_data is not None:
+#             for row_key in self._unfiltered_rows.keys():
+#                 self._unfiltered_data[row_key][column_key] = default
+#
+#         return column_key
+#
+#     def add_row(
+#         self, *cells: CellType, height: int = 1, key: str | None = None, label: TextType | None = None
+#     ) -> RowKey:
+#         row_key = super().add_row(*cells, height=height, key=key, label=label)
+#
+#         if self._unfiltered_data is not None:
+#             self._unfiltered_data[row_key] = {
+#                 column.key: cell for column, cell in zip_longest(self.ordered_columns, cells)
+#             }
+#             label = Text.from_markup(label) if isinstance(label, str) else label
+#             self._unfiltered_rows[row_key] = Row(row_key, height, label)
+#
+#         return row_key
+#
+#     def remove_row(self, row_key: RowKey | str) -> None:
+#         super().remove_row(row_key)
+#         if self._unfiltered_data is not None:
+#             del self._unfiltered_rows[row_key]
+#             del self._unfiltered_data[row_key]
+#
+#     def remove_column(self, column_key: ColumnKey | str) -> None:
+#         super().remove_column(column_key)
+#
+#         if self._unfiltered_data is not None:
+#             for row in self._unfiltered_data:
+#                 del self._unfiltered_data[row][column_key]
 
-    def filter(
-        self,
-        *columns: ColumnKey | str,
-        search: str,
-        reverse: bool = False,
-    ) -> Self:
-        """Sort the rows in the `DataTable` by one or more column keys or a
-        key function (or other callable). If both columns and a key function
-        are specified, only data from those columns will sent to the key function.
-
-        Args:
-            columns: One or more columns to sort by the values in.
-            key: A function (or other callable) that returns a key to
-                use for sorting purposes.
-            reverse: If True, the sort order will be reversed.
-
-        Returns:
-            The `DataTable` instance.
-        """
-
-        # def key_wrapper(row: tuple[RowKey, dict[ColumnKey | str, CellType]]) -> Any:
-        #     _, row_data = row
-        #     if columns:
-        #         result = itemgetter(*columns)(row_data)
-        #     else:
-        #         result = tuple(row_data.values())
-        #     if key is not None:
-        #         return key(result)
-        #     return result
-
-        def equals(row):
-            _, row_data = row
-            col = itemgetter(*columns)(row_data)
-            self.log(f'{col}: {search in col}')
-            return search in col
-
-        self.log(f'ORIGINAL: {self._data.items()}')
-        c = self._data.copy()
-        for k, v in c.items():
-            # _, row_data = v
-            self.log(f'KEY: {k}\nVAL: {v}')
-            col = itemgetter(*columns)(v)
-            if not col or search not in col:
-                self.log('WOULD DELETE')
-                self.remove_row(k)
-        # for x in o:
-        #     self.log(f'FILTER ITEM: {x}')
-        # ordered_rows = sorted(
-        #     self._data.items(),
-        #     key=key_wrapper,
-        #     reverse=reverse,
-        # )
-        # self.rows = new
-        # self._data = new
-        # self.log(f'UPDATED: {self._data.items()}')
-        # self._update_count += 1
-        # self.refresh()
-        return self
 
 class MainScreen(Screen):
     def compose(self):
         yield Header()
         with Container(id='app-grid'):
-            yield DataTableFilter(id='messages')
+            yield DataTable(id='messages')
             yield RichLog(id='log', highlight=True, markup=True)
             with Container(id='status-container'):
                 yield StatusWidget(id='status')
@@ -268,7 +314,8 @@ class MainScreen(Screen):
         log.write(f'multimon-ng version: {mmng_text.splitlines()[0]}')
         log.write(f'JSON capable: {json_capable}')
 
-        mmng_args = f'-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -a FLEX -a FLEX_NEXT -f alpha -t raw -u -q --timestamp -p {"--json" if json_capable else ""} -'
+        status.charset = self.app.charset
+        mmng_args = f'-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -a FLEX -a FLEX_NEXT -f alpha -t raw -u -q --timestamp -p {"--json" if json_capable else ""} -C {self.app.charset} -'
         self.log('About to start multimon')
         self.stream_subprocess(self.app.mmng_binary, mmng_args)
         self.log('AFTER: About to start multimon')
@@ -340,10 +387,11 @@ class MainScreen(Screen):
             self.log('Adding a row')
             table.add_row(
                 str(result.current_time.strftime('%H:%M:%S')),
-                Text(result.address, justify='right'),
+                Text(str(result.address), justify='right'),
                 result.trim_message,
                 height=None,
             )
+            # await table.filter_refresh()
         else:
             log.write('WARNING: No valid message decoded from multimon-ng')
 
@@ -368,15 +416,17 @@ class MainScreen(Screen):
 
 
 class Pocsag(App):
-    def __init__(self, mmng_binary: str, port: int) -> None:
+    def __init__(self, mmng_binary: str, port: int, charset) -> None:
         self.mmng_binary = mmng_binary
         self.port = port
-        self.filter: str = None
+        self.charset = charset
+        # self.filter: str = None
         super().__init__()
 
     CSS_PATH = 'pocsag.tcss'
 
-    SCREENS = {'help': HelpScreen, 'filter': FilterScreen}
+    # SCREENS = {'help': HelpScreen, 'filter': FilterScreen}
+    SCREENS = {'help': HelpScreen}
 
     BINDINGS = [
         Binding(key='q', action='quit', description='Quit the app'),
@@ -387,7 +437,7 @@ class Pocsag(App):
             key_display='?',
         ),
         Binding(key='c', action='clear_screen', description='Clear all panes'),
-        Binding(key='/', action='filter', description='Filter the messages'),
+        # Binding(key='/', action='filter', description='Filter the messages'),
     ]
 
     message_count = []
@@ -398,29 +448,36 @@ class Pocsag(App):
     def action_clear_screen(self) -> None:
         self.screen.query_one('#messages').clear()
         self.screen.query_one('#log').clear()
+    #
+    # async def action_filter(self) -> None:
+    #     async def check_filter(filter: str | None) -> None:
+    #         """Called when FilterScreen is dismissed."""
+    #         table = self.screen.query_one('#messages')
+    #         self.log(filter)
+    #         self.filter = filter
+    #         await table.filter('message', search=self.filter)
+    #
+    #     await self.push_screen(FilterScreen(), check_filter)
 
-    def action_filter(self) -> None:
-        def check_filter(filter: str | None) -> None:
-            """Called when FilterScreen is dismissed."""
-            if filter:
-                table = self.screen.query_one('#messages')
-                self.log(filter)
-                self.filter = filter
-                table.filter('message', search=self.filter)
 
-        self.push_screen(FilterScreen(), check_filter)
-
-
-@click.command()
+@click.command(context_settings={'show_default': True})
 @click.option('--mmng-binary', '-m', required=False, default='multimon-ng', help='Path to multimon-ng binary')
 @click.option('--port', '-p', required=False, type=int, default=8888, help='Port to listen on')
+@click.option(
+    '--charset',
+    '-c',
+    type=click.Choice(['US', 'FR', 'DE', 'SE', 'SI'], case_sensitive=False),
+    required=False,
+    default='US',
+    help='Charset encoding (case sensitive!)',
+)
 @click.version_option(version=__version__)
-def main(mmng_binary, port):
+def main(mmng_binary, port, charset):
     if not shutil.which(mmng_binary):
         click.echo('multimon-ng binary not found!', err=True)
         sys.exit(1)
 
-    Pocsag(mmng_binary, port).run()
+    Pocsag(mmng_binary, port, charset).run()
 
 
 if __name__ == '__main__':
