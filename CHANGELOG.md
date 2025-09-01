@@ -1,3 +1,10 @@
+## 1.0.8 (2025-09-01)
+
+### added (2 changes)
+
+- [Implement the ability to choose a charset. Addresses GH #4. Temporarily removed the filtering code.](lucid/mmng-ui@a4f9c43d2df28005e7e7f69c26405f6237e93452)
+- [Add FLEX_NEXT decoding to multimon-ng.](lucid/mmng-ui@186e0c198a5ca266519ae0cf56a1cf85371c2291)
+
 ## 1.0.7 (2024-12-11)
 
 ### added (1 change)
