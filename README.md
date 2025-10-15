@@ -1,6 +1,6 @@
 # mmng-ui
 
-A TUI (text user interface) frontend for `multimon-ng`.
+A TUI (text user interface) frontend for [multimon-ng](https://github.com/EliasOenal/multimon-ng).
 
 `mmng-ui` will listen on a chosen UDP port for raw streams from software like SDR++, use `multimon-ng` to decode it,
 and show you POCSAG messages in a wonderful text interface.
@@ -75,8 +75,7 @@ The mouse will also work!
 
 `mmng-ui` will attempt to auto-detect the output format from `multimon-ng`, and if it looks like JSON, it'll use it.
 
-JSON output isn't yet in `multimon-ng`, but I have a working
-fork [here](https://github.com/lingfish/multimon-ng/tree/add-json).
+JSON output was merged into `multimon-ng` [version 1.4.0](https://github.com/EliasOenal/multimon-ng/releases/tag/1.4.0).
 
 ## Example screenshot
 
