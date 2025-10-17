@@ -36,8 +36,8 @@ source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "src/mmng_ui/_version.py"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/mmng_ui"]
+[tool.hatch.build.targets.sdist]
+only-packages = true
 
 [tool.hatch.envs.dev]
 extra-dependencies = [
