@@ -44,13 +44,17 @@ extra-dependencies = [
     "textual-dev",
 ]
 
+[tool.hatch.version.raw-options]
+version_scheme = "guess-next-dev"
+local_scheme = "no-local-version"
+
 [tool.coverage.run]
 source_pkgs = ["mmng_ui", "tests"]
 branch = true
 parallel = true
 
 [tool.coverage.paths]
-mdns_filoxy = ["src/mmng_ui", "*/mmng-ui/src/mmng_ui"]
+mmng_ui = ["src/mmng_ui", "*/mmng-ui/src/mmng_ui"]
 tests = ["tests", "*/mmng-ui/tests"]
 
 [tool.coverage.report]
