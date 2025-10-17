@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "mmng-ui"
@@ -10,17 +10,17 @@ authors = [
 ]
 description = "The textual user interface to multimon-ng."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "click",
-    "textual",
-    "rich",
-    "moment",
+    "click==8.3.0",
+    "textual==6.3.0",
+    "rich==14.2.0",
+    "moment==0.12.1",
 ]
 
 [project.scripts]
@@ -30,9 +30,19 @@ mmng-ui = "mmng_ui.pocsag:main"
 Homepage = "https://github.com/lingfish/mmng-ui"
 Issues = "https://github.com/lingfish/mmng-ui/issues"
 
-[tool.setuptools_scm]
-version_file = "src/mmng_ui/_version.py"
-local_scheme = "no-local-version"
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/mmng_ui/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mmng_ui"]
+
+[tool.hatch.envs.dev]
+extra-dependencies = [
+    "textual-dev",
+]
 
 [tool.pylint]
 max-line-length = 120

@@ -85,4 +85,4 @@ Here's what a screen full of decodes might look like:
 
 ## Supported Python versions
 
-`mmng-ui` supports Python 3.9 and newer.
+`mmng-ui` supports Python 3.10 and newer.
