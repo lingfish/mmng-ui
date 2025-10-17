@@ -5,12 +5,16 @@ image: python:latest
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
-# https://pip.pypa.io/en/stable/topics/caching/
-cache:
-  paths:
-    - .cache/pip
+# https://docs.gitlab.com/ci/caching/#inherit-global-configuration-but-override-specific-settings-per-job
+default:
+  cache: &global_cache
+    key: $CI_COMMIT_REF_SLUG
+    paths:
+      - .cache/pip
+    policy: pull-push
 
 stages:
+  - build_cache
   - prepare
   - test
   - build
@@ -23,11 +27,27 @@ workflow:
       when: never
     - when: always
 
+build-cache:
+  stage: build_cache
+  tags:
+    - docker
+  image: python:latest
+  script:
+    - python --version
+    - pip --version  # For debugging
+    - pip install -U pip
+    - pip install hatch
+
 prepare:
   stage: prepare
   tags:
     - docker
   image: "python:latest"
+  cache:
+    # inherit all global cache settings
+    <<: *global_cache
+    # override the policy
+    policy: pull
   rules:
     - if: $CI_COMMIT_TAG                 # Run this job when a tag is created
   script:
@@ -40,20 +60,11 @@ test:
   image: "python:$VERSION"
   script:
     - python --version ; pip --version  # For debugging
-    - pip install pytest tox click
-    - tox -e py${VERSION}
+    - pip install hatch
+    - hatch test -v --cover
   parallel:
     matrix:
-      - VERSION: ['3.9', '3.11']
-  artifacts:
-    when: always
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: coverage.xml
-      junit: report.xml
-    paths:
-      - report.xml
+      - VERSION: ['3.10', '3.11', '3.12']
   coverage: '/TOTAL.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
 
 build:
@@ -61,9 +72,14 @@ build:
   tags:
     - docker
   image: "python:latest"
+  cache:
+    # inherit all global cache settings
+    <<: *global_cache
+    # override the policy
+    policy: pull
   script:
-    - pip install build
-    - python3 -m build
+    - pip install hatch
+    - hatch build
   artifacts:
     paths:
       - dist/
@@ -73,36 +89,52 @@ pypi_test:
   tags:
     - docker
   image: "python:latest"
+  cache:
+    # inherit all global cache settings
+    <<: *global_cache
+    # override the policy
+    policy: pull
   rules:
     - if: $CI_COMMIT_TAG
       when: never
     - when: on_success
   variables:
-    TWINE_USERNAME: $PYPI_TEST_USERNAME
-    TWINE_PASSWORD: $PYPI_TEST_PASSWORD
+    HATCH_INDEX_REPO: test
+    HATCH_INDEX_USER: $PYPI_TEST_USERNAME
+    HATCH_INDEX_AUTH: $PYPI_TEST_PASSWORD
   script:
-    - pip install twine
-    - python3 -m twine upload --repository testpypi --skip-existing dist/*
+    - pip install hatch
+    - hatch publish
 
 pypi_prod:
   stage: pypi
   tags:
     - docker
   image: "python:latest"
+  cache:
+    # inherit all global cache settings
+    <<: *global_cache
+    # override the policy
+    policy: pull
   rules:
     - if: $CI_COMMIT_TAG
   variables:
-    TWINE_USERNAME: $PYPI_PROD_USERNAME
-    TWINE_PASSWORD: $PYPI_PROD_PASSWORD
+    HATCH_INDEX_USER: $PYPI_PROD_USERNAME
+    HATCH_INDEX_AUTH: $PYPI_PROD_PASSWORD
   script:
-    - pip install twine
-    - python3 -m twine upload dist/*
+    - pip install hatch
+    - hatch publish
 
 release_job:
   stage: release
   tags:
     - docker
   image: registry.gitlab.com/gitlab-org/release-cli:latest
+  cache:
+    # inherit all global cache settings
+    <<: *global_cache
+    # override the policy
+    policy: pull
   rules:
     - if: $CI_COMMIT_TAG                 # Run this job when a tag is created
   script:

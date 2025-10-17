@@ -44,6 +44,22 @@ extra-dependencies = [
     "textual-dev",
 ]
 
+[tool.coverage.run]
+source_pkgs = ["mmng_ui", "tests"]
+branch = true
+parallel = true
+
+[tool.coverage.paths]
+mdns_filoxy = ["src/mmng_ui", "*/mmng-ui/src/mmng_ui"]
+tests = ["tests", "*/mmng-ui/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "no cov",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
 [tool.pylint]
 max-line-length = 120
 
