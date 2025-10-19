@@ -1,3 +1,21 @@
+## 1.1.0 (2025-10-19)
+
+### added (1 change)
+
+- [Add an about/info screen, showing version numbers and paths to binaries.](lucid/mmng-ui@9488b16f1c85d2c078dd118a058d58f383e858ca) ([merge request](lucid/mmng-ui!2))
+
+### fixed (1 change)
+
+- [Update GitLab pipeline to use hatch and do some coverage](lucid/mmng-ui@6ca069a083e517c5f352ed85d2d13c3d86934f41) ([merge request](lucid/mmng-ui!1))
+
+### changed (5 changes)
+
+- [Change to hatch, update and lock down textual to 6.3.0 (and supporting libs),...](lucid/mmng-ui@5ab5cfa15a834def9d2d9bf9fa3a2b43aae90b6a) ([merge request](lucid/mmng-ui!1))
+- [Update CSS for *way* newer version of textual.](lucid/mmng-ui@6a325128206e72a80a6873cdf2ffe4c0bdbfbd85) ([merge request](lucid/mmng-ui!1))
+- [Update helpscreen.](lucid/mmng-ui@9d5880c914d724eec3fc5d756fcf071f531a3021) ([merge request](lucid/mmng-ui!1))
+- [Update screenshots.](lucid/mmng-ui@1443efc1e22efe198857420b1bdd866ac3f606bb) ([merge request](lucid/mmng-ui!1))
+- [Update doco to reflect multimon-ng merged my JSON code at version 1.4.0.](lucid/mmng-ui@5bf1c2a76c2f6f9b1cfd4854f932c8001cb281fd) ([merge request](lucid/mmng-ui!1))
+
 ## 1.0.8 (2025-09-01)
 
 ### added (2 changes)
