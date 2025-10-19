@@ -13,6 +13,8 @@ and show you POCSAG messages in a wonderful text interface.
   * [Purpose](#purpose)
   * [Installation](#installation)
   * [How to use it](#how-to-use-it)
+    * [JSON mode](#json-mode)
+  * [Example screenshot](#example-screenshot)
   * [Supported Python versions](#supported-python-versions)
 <!-- TOC -->
 

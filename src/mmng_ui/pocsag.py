@@ -13,21 +13,31 @@ from dataclasses import dataclass
 
 import click
 # from rich import inspect
-from rich.text import Text, TextType
+from rich.text import Text
 # from textual._two_way_dict import TwoWayDict
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, VerticalScroll, Vertical
+from textual.containers import Container, Center
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
 from textual.widget import Widget
-from textual.widgets import Header, Static, RichLog, DataTable, Footer, HelpPanel, Markdown, Sparkline, Input
-from textual import work, events, on
+from textual.widgets import (
+    Header,
+    RichLog,
+    DataTable,
+    Footer,
+    Markdown,
+    Sparkline,
+    Label,
+    Digits,
+    Rule,
+)
+from textual import work, events
 from textual.message import Message
 from textual.binding import Binding
 from textual.actions import SkipAction
 # from textual.widgets._data_table import ColumnKey, CellType, RowKey, CellDoesNotExist, Row
 
-from mmng_ui.reader import ParseLine, PocsagMessage
+from mmng_ui.reader import ParseLine
 from mmng_ui._version import __version__
 
 
@@ -50,6 +60,14 @@ class Status:
 
     def __repr__(self):
         return f'Receiver: {self.receiver}\nIP address: {self.ip_address}'
+
+@dataclass
+class Executable:
+    """An info class for the executables to run."""
+
+    command: str
+    resolved_path: str
+    version: str | None
 
 
 class UDPHandler(asyncio.DatagramProtocol):
@@ -154,6 +172,40 @@ JSON output was merged into `multimon-ng` [version 1.4.0](https://github.com/Eli
 #     @on(Input.Submitted)
 #     def handle_filter(self, event: Input.Submitted) -> None:
 #         self.dismiss(event.value)
+
+class AboutScreen(ModalScreen):
+    """About/info screen modal."""
+
+    BINDINGS = [("escape,space,q", "app.pop_screen", "Close")]
+
+    def compose(self) -> ComposeResult:
+        mmng_info = f'''
+## multimon-ng
+
+```
+Path: {self.app.mmng.resolved_path}
+Version: {self.app.mmng.version}
+```
+        '''
+        if self.app.sox_binary:
+            sox_info = f'''
+## sox
+
+```
+Path: {self.app.sox.resolved_path}
+Version: {self.app.sox.version}
+```
+        '''
+        with Container(id='about'):
+            yield Markdown('# This is mmng-ui!')
+            with Center():
+                yield Label("Version", classes='version')
+            with Center():
+                yield Digits(__version__, classes='version')
+            yield Rule(line_style="double")
+            yield Markdown(mmng_info)
+            if self.app.sox_binary:
+                yield Markdown(sox_info)
 
 
 class MsgsPerSecond(Sparkline):
@@ -311,9 +363,17 @@ class MainScreen(Screen):
         await mmng_help_process.wait()
         mmng_text = mmng_help.decode()
         json_capable = '--json' in mmng_text
-        log.write(f'multimon-ng version: {mmng_text.splitlines()[0]}')
+        self.app.mmng.version = mmng_text.splitlines()[0].split()[1]
+        log.write(f'multimon-ng version: {self.app.mmng.version}')
         log.write(f'JSON capable: {json_capable}')
 
+        if self.app.sox_binary:
+            sox_help_process = await asyncio.create_subprocess_exec(self.app.sox_binary, '--version', stdout=PIPE)
+            sox_help = await sox_help_process.stdout.read()
+            await sox_help_process.wait()
+            sox_text = sox_help.decode()
+            self.app.sox.version = sox_text.splitlines()[0].split()[2].lstrip('v')
+            log.write(f'sox version: {self.app.sox.version}')
         status.charset = self.app.charset
         mmng_args = f'-a POCSAG512 -a POCSAG1200 -a POCSAG2400 -a FLEX -a FLEX_NEXT -f alpha -t raw -u -q --timestamp -p {"--json" if json_capable else ""} -C {self.app.charset} -'
         self.log('About to start multimon')
@@ -416,10 +476,14 @@ class MainScreen(Screen):
 
 
 class Pocsag(App):
-    def __init__(self, mmng_binary: str, port: int, charset) -> None:
+    def __init__(self, mmng_binary: str, port: int, charset: str, sox_binary: str | None) -> None:
         self.mmng_binary = mmng_binary
+        self.sox_binary = sox_binary
         self.port = port
         self.charset = charset
+        self.mmng = Executable(command=mmng_binary, resolved_path=shutil.which(mmng_binary), version=None)
+        if sox_binary:
+            self.sox = Executable(command=sox_binary, resolved_path=shutil.which(sox_binary) or None, version=None)
         # self.filter: str = None
         super().__init__()
 
@@ -437,6 +501,12 @@ class Pocsag(App):
             key_display='?',
         ),
         Binding(key='c', action='clear_screen', description='Clear all panes'),
+        Binding(
+            key='a',
+            action="about",
+            description='About/info',
+            key_display='a',
+        ),
         # Binding(key='/', action='filter', description='Filter the messages'),
     ]
 
@@ -459,9 +529,12 @@ class Pocsag(App):
     #
     #     await self.push_screen(FilterScreen(), check_filter)
 
+    def action_about(self) -> None:
+        self.push_screen(AboutScreen())
 
 @click.command(context_settings={'show_default': True})
 @click.option('--mmng-binary', '-m', required=False, default='multimon-ng', help='Path to multimon-ng binary')
+@click.option('--sox-binary', '-s', required=False, help='Path to sox binary')
 @click.option('--port', '-p', required=False, type=int, default=8888, help='Port to listen on')
 @click.option(
     '--charset',
@@ -472,12 +545,12 @@ class Pocsag(App):
     help='Charset encoding (case sensitive!)',
 )
 @click.version_option(version=__version__)
-def main(mmng_binary, port, charset):
+def main(mmng_binary, sox_binary, port, charset):
     if not shutil.which(mmng_binary):
-        click.echo('multimon-ng binary not found!', err=True)
+        click.echo(f'multimon-ng binary not found!  I searched for "{mmng_binary}"', err=True)
         sys.exit(1)
 
-    Pocsag(mmng_binary, port, charset).run()
+    Pocsag(mmng_binary=mmng_binary, sox_binary=sox_binary, port=port, charset=charset).run()
 
 
 if __name__ == '__main__':
