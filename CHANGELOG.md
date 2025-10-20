@@ -1,3 +1,9 @@
+## 1.2.0 (2025-10-20)
+
+### added (1 change)
+
+- [Add the ability to use mmng-ui in a web browser!](lucid/mmng-ui@99aece4bb13e0d3ee7b36e47151d33392e54fb27) ([merge request](lucid/mmng-ui!3))
+
 ## 1.1.0 (2025-10-19)
 
 ### added (1 change)
