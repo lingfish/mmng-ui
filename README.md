@@ -17,7 +17,7 @@ You can also use it within a web browser!
     * [Normal TUI (text console) mode](#normal-tui-text-console-mode)
     * [Web mode](#web-mode)
   * [How to use it](#how-to-use-it)
-    * [JSON mode](#json-mode)
+    * [JSON detection](#json-detection)
   * [Example screenshot](#example-screenshot)
   * [Supported Python versions](#supported-python-versions)
 <!-- TOC -->
