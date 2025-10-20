@@ -23,6 +23,11 @@ dependencies = [
     "moment==0.12.1",
 ]
 
+[project.optional-dependencies]
+web = [
+  "textual-serve==1.1.2",
+]
+
 [project.scripts]
 mmng-ui = "mmng_ui.pocsag:main"
 
