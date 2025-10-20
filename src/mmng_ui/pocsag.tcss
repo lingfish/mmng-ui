@@ -52,8 +52,8 @@ AboutScreen {
 }
 
 #about {
-    width: 50%;
-    height: 90%;
+    width: 70%;
+    height: auto;
     border: thick solid yellow;
     background: $boost;
 }

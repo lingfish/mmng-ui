@@ -544,13 +544,38 @@ class Pocsag(App):
     default='US',
     help='Charset encoding (case sensitive!)',
 )
+@click.option('--serve', required=False, is_flag=True, default=False, help='Serve the app via the web')
+@click.option('--serve-host', required=False, type=str, help='Host/IP to serve the app on (when using --serve)')
+@click.option('--serve-port', required=False, type=int, help='Port to serve the app on (when using --serve)')
 @click.version_option(version=__version__)
-def main(mmng_binary, sox_binary, port, charset):
-    if not shutil.which(mmng_binary):
-        click.echo(f'multimon-ng binary not found!  I searched for "{mmng_binary}"', err=True)
-        sys.exit(1)
+def main(mmng_binary, sox_binary, port, charset, serve, serve_host, serve_port):
+    if serve or serve_host or serve_port:
+        if not serve:
+            serve = True
+        if not serve_host:
+            serve_host = None
+        if not serve_port:
+            serve_port = 8000
 
-    Pocsag(mmng_binary=mmng_binary, sox_binary=sox_binary, port=port, charset=charset).run()
+        try:
+            from textual_serve.server import Server
+            import socket
+            if serve_host == 'localhost':
+                public_url = f'http://localhost:{serve_port}'
+            else:
+                public_url = f'http://{socket.getfqdn()}:{serve_port}'
+            server = Server(command='mmng-ui', host=serve_host, port=serve_port, public_url=public_url)
+            server.serve()
+        except ImportError:
+            click.echo('Error: textual-serve is not installed.  Please install mmng-ui via "pipx install mmng-ui[web]"', err=True)
+            sys.exit(1)
+
+    else:
+        if not shutil.which(mmng_binary):
+            click.echo(f'multimon-ng binary not found!  I searched for "{mmng_binary}"', err=True)
+            sys.exit(1)
+
+        Pocsag(mmng_binary=mmng_binary, sox_binary=sox_binary, port=port, charset=charset).run()
 
 
 if __name__ == '__main__':

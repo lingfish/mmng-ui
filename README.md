@@ -5,6 +5,8 @@ A TUI (text user interface) frontend for [multimon-ng](https://github.com/EliasO
 `mmng-ui` will listen on a chosen UDP port for raw streams from software like SDR++, use `multimon-ng` to decode it,
 and show you POCSAG messages in a wonderful text interface.
 
+You can also use it within a web browser!
+
 ## Table of contents
 
 <!-- TOC -->
@@ -12,8 +14,10 @@ and show you POCSAG messages in a wonderful text interface.
   * [Table of contents](#table-of-contents)
   * [Purpose](#purpose)
   * [Installation](#installation)
+    * [Normal TUI (text console) mode](#normal-tui-text-console-mode)
+    * [Web mode](#web-mode)
   * [How to use it](#how-to-use-it)
-    * [JSON mode](#json-mode)
+    * [JSON detection](#json-detection)
   * [Example screenshot](#example-screenshot)
   * [Supported Python versions](#supported-python-versions)
 <!-- TOC -->
@@ -27,6 +31,8 @@ I also wanted to learn both [Rich](https://github.com/Textualize/rich) and [Text
 
 ## Installation
 
+### Normal TUI (text console) mode
+
 The recommended way to install `mmng-ui` is to use [pipx](https://pipx.pypa.io/stable/).
 
 After getting `pipx` installed, simply run:
@@ -38,6 +44,23 @@ username@host:~$ pipx install mmng-ui
 Please [don't use pip system-wide](https://docs.python.org/3.11/installing/index.html#installing-into-the-system-python-on-linux).
 
 You can of course also install it using classic virtualenvs.
+
+### Web mode
+
+Thanks to Textual's [web serving support](https://github.com/Textualize/textual-serve), you can also run `mmng-ui` in a
+web browser!
+
+First, install `mmng-ui` with the `web` feature/extra:
+
+```shell
+username@host:~$ pipx install 'mmng-ui[web]'
+```
+
+Then run `mmng-ui` with the `--serve` option.  Your console will show you the URL to connect to!
+
+By default, it will bind to all interfaces (and both IPv4 and IPv6 if enabled).  See the help screen for other choices.
+
+If you supply either `--serve-host` or `--serve-port`, there's no need to specify `--serve` as well -- it is implied.
 
 ## How to use it
 
@@ -73,11 +96,11 @@ The footer shows available keyboard choices to quit the app, show a help screen,
 
 The mouse will also work!
 
-### JSON mode
+### JSON detection
 
 `mmng-ui` will attempt to auto-detect the output format from `multimon-ng`, and if it looks like JSON, it'll use it.
 
-JSON output was merged into `multimon-ng` [version 1.4.0](https://github.com/EliasOenal/multimon-ng/releases/tag/1.4.0).
+JSON output was merged into `multimon-ng` [version 1.4.0](https://github.com/EliasOenal/multimon-ng/releases/tag/1.4.0).  Support for older versions will eventually be dropped.
 
 ## Example screenshot
 
