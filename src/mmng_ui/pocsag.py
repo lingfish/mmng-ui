@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 import sys
@@ -12,7 +13,6 @@ from subprocess import PIPE
 from dataclasses import dataclass
 
 import click
-# from rich import inspect
 from rich.text import Text
 # from textual._two_way_dict import TwoWayDict
 from textual.app import App, ComposeResult
@@ -89,8 +89,12 @@ class UDPHandler(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         self.last_activity_time = self.loop.time()
         self.status.ip_address = addr[0]
-        self.app.process.stdin.write(data)
-        self.app.process.stdin.drain()
+        if self.app.app.sox_rate:
+            stdin = self.app.sox_process.stdin
+        else:
+            stdin = self.app.process.stdin
+        stdin.write(data)
+        stdin.drain()
 
     async def idle_task(self):
         """This updates the things in the status pane."""
@@ -187,7 +191,7 @@ Path: {self.app.mmng.resolved_path}
 Version: {self.app.mmng.version}
 ```
         '''
-        if self.app.sox_binary:
+        if self.app.sox_rate:
             sox_info = f'''
 ## sox
 
@@ -204,8 +208,10 @@ Version: {self.app.sox.version}
                 yield Digits(__version__, classes='version')
             yield Rule(line_style="double")
             yield Markdown(mmng_info)
-            if self.app.sox_binary:
+            if self.app.sox_rate:
                 yield Markdown(sox_info)
+
+
 
 
 class MsgsPerSecond(Sparkline):
@@ -367,7 +373,7 @@ class MainScreen(Screen):
         log.write(f'multimon-ng version: {self.app.mmng.version}')
         log.write(f'JSON capable: {json_capable}')
 
-        if self.app.sox_binary:
+        if self.app.sox_rate:
             sox_help_process = await asyncio.create_subprocess_exec(self.app.sox_binary, '--version', stdout=PIPE)
             sox_help = await sox_help_process.stdout.read()
             await sox_help_process.wait()
@@ -384,9 +390,23 @@ class MainScreen(Screen):
     async def stream_subprocess(self, command, args):
         """Stream output from a subprocess and post it using post_message."""
         self.log('   in stream_subprocess')
-        self.process = await asyncio.create_subprocess_exec(
-            command, *shlex.split(args), stdin=PIPE, stdout=PIPE, stderr=PIPE
-        )
+
+        if self.app.sox_rate:
+            sox_args = f'-t raw -esigned-integer -b16 -r{self.app.sox_rate} - -t raw -esigned-integer -b16 -r22050 -'
+            sox_read, sox_write = os.pipe()
+            self.sox_process = await asyncio.create_subprocess_exec(
+                self.app.sox_binary, *shlex.split(sox_args), stdin=PIPE, stdout=sox_write, stderr=PIPE
+            )
+            os.close(sox_write)
+
+            self.process = await asyncio.create_subprocess_exec(
+                command, *shlex.split(args), stdin=sox_read, stdout=PIPE, stderr=PIPE
+            )
+            os.close(sox_read)
+        else:
+            self.process = await asyncio.create_subprocess_exec(
+                command, *shlex.split(args), stdin=PIPE, stdout=PIPE, stderr=PIPE
+            )
         self.log('*** process is assigned')
 
         network_loop = asyncio.get_running_loop()
@@ -405,6 +425,8 @@ class MainScreen(Screen):
 
         # Handle any stderr errors
         async for error in self.read_process_output(self.process.stderr):
+            self.post_message(OutputMessage(f'[red]Error: {error}'))
+        async for error in self.read_process_output(self.sox_process.stderr):
             self.post_message(OutputMessage(f'[red]Error: {error}'))
 
     async def read_process_output(self, output):
@@ -476,13 +498,14 @@ class MainScreen(Screen):
 
 
 class Pocsag(App):
-    def __init__(self, mmng_binary: str, port: int, charset: str, sox_binary: str | None) -> None:
+    def __init__(self, mmng_binary: str, port: int, charset: str, sox_binary: str | None, sox_rate: int | None) -> None:
         self.mmng_binary = mmng_binary
         self.sox_binary = sox_binary
         self.port = port
         self.charset = charset
+        self.sox_rate = sox_rate
         self.mmng = Executable(command=mmng_binary, resolved_path=shutil.which(mmng_binary), version=None)
-        if sox_binary:
+        if self.sox_binary and self.sox_rate:
             self.sox = Executable(command=sox_binary, resolved_path=shutil.which(sox_binary) or None, version=None)
         # self.filter: str = None
         super().__init__()
@@ -532,9 +555,12 @@ class Pocsag(App):
     def action_about(self) -> None:
         self.push_screen(AboutScreen())
 
+
+
 @click.command(context_settings={'show_default': True})
 @click.option('--mmng-binary', '-m', required=False, default='multimon-ng', help='Path to multimon-ng binary')
-@click.option('--sox-binary', '-s', required=False, help='Path to sox binary')
+@click.option('--sox-binary', '-s', required=False, default='sox', help='Path to sox binary (this does not imply that sox will run')
+@click.option('--sox-rate', '-r', required=False, type=str, help='Input samplerate for sox to convert from')
 @click.option('--port', '-p', required=False, type=int, default=8888, help='Port to listen on')
 @click.option(
     '--charset',
@@ -548,7 +574,7 @@ class Pocsag(App):
 @click.option('--serve-host', required=False, type=str, help='Host/IP to serve the app on (when using --serve)')
 @click.option('--serve-port', required=False, type=int, help='Port to serve the app on (when using --serve)')
 @click.version_option(version=__version__)
-def main(mmng_binary, sox_binary, port, charset, serve, serve_host, serve_port):
+def main(mmng_binary, sox_binary, sox_rate, port, charset, serve, serve_host, serve_port):
     if serve or serve_host or serve_port:
         if not serve:
             serve = True
@@ -575,7 +601,12 @@ def main(mmng_binary, sox_binary, port, charset, serve, serve_host, serve_port):
             click.echo(f'multimon-ng binary not found!  I searched for "{mmng_binary}"', err=True)
             sys.exit(1)
 
-        Pocsag(mmng_binary=mmng_binary, sox_binary=sox_binary, port=port, charset=charset).run()
+        if sox_rate:
+            if not shutil.which(sox_binary):
+                click.echo(f'sox binary not found!  I searched for "{sox_binary}"', err=True)
+                sys.exit(1)
+
+        Pocsag(mmng_binary=mmng_binary, sox_binary=sox_binary, sox_rate=sox_rate, port=port, charset=charset).run()
 
 
 if __name__ == '__main__':
