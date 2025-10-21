@@ -1,3 +1,9 @@
+## 1.3.0 (2025-10-21)
+
+### added (1 change)
+
+- [This adds support for running sox in the pipeline to convert incoming streams...](lucid/mmng-ui@1da9ff2480d83045d728a4639477bf50845a82f3) ([merge request](lucid/mmng-ui!4))
+
 ## 1.2.0 (2025-10-20)
 
 ### added (1 change)
