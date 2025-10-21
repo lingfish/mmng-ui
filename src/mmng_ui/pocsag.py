@@ -207,9 +207,10 @@ Version: {self.app.sox.version}
             with Center():
                 yield Digits(__version__, classes='version')
             yield Rule(line_style="double")
-            yield Markdown(mmng_info)
-            if self.app.sox_rate:
-                yield Markdown(sox_info)
+            with Container(id='app-versions'):
+                yield Markdown(mmng_info)
+                if self.app.sox_rate:
+                    yield Markdown(sox_info)
 
 
 

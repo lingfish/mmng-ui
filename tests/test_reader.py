@@ -69,6 +69,9 @@ def sample_data():
 def sample_json_data():
     return '{"demod_name":"POCSAG1200","address":1920312,"function":3,"alpha":"Time Critical Incident - Clear ASAP - or advise Comms of Time to Clear (Via Radio)"}'
 
+@pytest.fixture
+def sample_json_data_flex():
+    return '{"timestamp": "2025-10-21 03:44:11", "sync_baud": 1600, "sync_level": 4, "phase_number": "A", "cycle_number": 11, "frame_number": 15, "capcode": 4294962309, "demod_name": "flex_alphanumeric", "message": "GW - CLEAR{AUTOMATIC SIGNAL DISABLED DURING PART LOAD OUT~CONVEYOR 1000349"}'
 
 @pytest.fixture(params=FLEX_LINES.splitlines())
 def flex_lines(request):
@@ -92,6 +95,14 @@ def test_parse_line_json(sample_json_data):
     result, json_detected = parse_line.parse(sample_json_data)
     assert result.address == '1920312'
     assert result.trim_message == 'Time Critical Incident - Clear ASAP - or advise Comms of Time to Clear (Via Radio)'
+    assert json_detected is True
+
+def test_parse_line_json_flex_missing_address(sample_json_data_flex):
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(sample_json_data_flex)
+    assert json_detected is True
+    assert result.address == ''
+    assert result.trim_message == 'GW - CLEAR{AUTOMATIC SIGNAL DISABLED DURING PART LOAD OUT~CONVEYOR 1000349'
     assert json_detected is True
 
 

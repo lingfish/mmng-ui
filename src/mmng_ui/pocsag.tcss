@@ -65,3 +65,14 @@ AboutScreen {
 Rule {
     color: goldenrod;
 }
+
+.column {
+    width: 50%;
+    height: auto;
+}
+
+#app-versions {
+    layout: grid;
+    grid-size: 2;
+    height: auto;
+}

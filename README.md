@@ -3,7 +3,7 @@
 A TUI (text user interface) frontend for [multimon-ng](https://github.com/EliasOenal/multimon-ng).
 
 `mmng-ui` will listen on a chosen UDP port for raw streams from software like SDR++, use `multimon-ng` to decode it,
-and show you POCSAG messages in a wonderful text interface.
+and show you POCSAG/FLEX messages in a wonderful text interface.
 
 You can also use it within a web browser!
 
@@ -18,6 +18,7 @@ You can also use it within a web browser!
     * [Web mode](#web-mode)
   * [How to use it](#how-to-use-it)
     * [JSON detection](#json-detection)
+    * [sox conversion mode](#sox-conversion-mode)
   * [Example screenshot](#example-screenshot)
   * [Supported Python versions](#supported-python-versions)
 <!-- TOC -->
@@ -25,9 +26,11 @@ You can also use it within a web browser!
 
 ## Purpose
 
-Why not?  I know there are other frontends out there, but I haevn't seen any for use in a text console.
+Why not?  I know there are other frontends out there, but I haven't seen any for use in a text console.
 
 I also wanted to learn both [Rich](https://github.com/Textualize/rich) and [Textual](https://github.com/Textualize/textual).
+
+See `CHANGELOG.md` for all the latest updates. The links may not be clickable.
 
 ## Installation
 
@@ -43,7 +46,7 @@ username@host:~$ pipx install mmng-ui
 
 Please [don't use pip system-wide](https://docs.python.org/3.11/installing/index.html#installing-into-the-system-python-on-linux).
 
-You can of course also install it using classic virtualenvs.
+You can of course also install it using [classic virtualenvs](https://docs.python.org/3/library/venv.html).
 
 ### Web mode
 
@@ -73,8 +76,10 @@ Run `mmng-ui`, and you'll be greeted with this screen:
 Notice in the status pane, it says "Receiver: idle" -- it is now listening for UDP packets sent to the default port
 of 8888.
 
-Now go to your favourite SDR application, and send to where `mmng-ui` is running.  Make sure it is the right sample
-rate that `multimon-ng` likes, 22050 Hz.  It probably helps to send mono too.
+Now go to your favourite SDR application, and send to where `mmng-ui` is running. If possible, make sure you encode and
+send in the right sample rate that `multimon-ng` likes, 22050 Hz. It probably helps to send mono too.
+
+If you can't send at 22050 Hz, [click here](#sox-conversion-mode) to read about using `sox` mode.
 
 Alpha POCSAG messages will soon display in the top pane.  The bottom pane will show the raw output from `multimon-ng`,
 as well as any errors or issues with decoding.
@@ -101,6 +106,12 @@ The mouse will also work!
 `mmng-ui` will attempt to auto-detect the output format from `multimon-ng`, and if it looks like JSON, it'll use it.
 
 JSON output was merged into `multimon-ng` [version 1.4.0](https://github.com/EliasOenal/multimon-ng/releases/tag/1.4.0).  Support for older versions will eventually be dropped.
+
+### sox conversion mode
+
+With release 1.3.0, you can use the `--sox-rate` (optionally with `--sox-binary`) CLI arguments and `mmng-ui` will put
+an instance of `sox` in the decoding pipeline, before `multimon-ng`. You can use the same format as `sox` accepts,
+for example, `48k`, or `32000`.
 
 ## Example screenshot
 
