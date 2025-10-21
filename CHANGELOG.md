@@ -1,3 +1,9 @@
+## 1.3.1 (2025-10-22)
+
+### fixed (1 change)
+
+- [Fixes GH #6, I didn't know FLEX does/does not have an address field, or that it's optional.](lucid/mmng-ui@c3ac56b8a48b4bf09d5f7fc7e325799e7e7ec4c9)
+
 ## 1.3.0 (2025-10-21)
 
 ### added (1 change)
