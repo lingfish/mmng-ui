@@ -1,45 +1,47 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import shlex
 import shutil
 import sys
-import asyncio
+from dataclasses import dataclass
+
 # from codecs import ignore_errors
 # from itertools import zip_longest
 # from operator import itemgetter
 # from re import search
 from subprocess import PIPE
-from dataclasses import dataclass
 
 import click
 from rich.text import Text
+from textual import events, work
+from textual.actions import SkipAction
+
 # from textual._two_way_dict import TwoWayDict
 from textual.app import App, ComposeResult
-from textual.containers import Container, Center
+from textual.binding import Binding
+from textual.containers import Center, Container
+from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
 from textual.widget import Widget
 from textual.widgets import (
-    Header,
-    RichLog,
     DataTable,
-    Footer,
-    Markdown,
-    Sparkline,
-    Label,
     Digits,
+    Footer,
+    Header,
+    Label,
+    Markdown,
+    RichLog,
     Rule,
+    Sparkline,
 )
-from textual import work, events
-from textual.message import Message
-from textual.binding import Binding
-from textual.actions import SkipAction
-# from textual.widgets._data_table import ColumnKey, CellType, RowKey, CellDoesNotExist, Row
 
-from mmng_ui.reader import ParseLine
 from mmng_ui._version import __version__
 
+# from textual.widgets._data_table import ColumnKey, CellType, RowKey, CellDoesNotExist, Row
+from mmng_ui.reader import ParseLine
 
 
 @dataclass
@@ -585,8 +587,9 @@ def main(mmng_binary, sox_binary, sox_rate, port, charset, serve, serve_host, se
             serve_port = 8000
 
         try:
-            from textual_serve.server import Server
             import socket
+
+            from textual_serve.server import Server
             if serve_host == 'localhost':
                 public_url = f'http://localhost:{serve_port}'
             else:

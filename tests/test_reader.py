@@ -1,11 +1,8 @@
-import warnings
-from xml.sax import parse
-
+# ruff: noqa: N802
 import moment
 import pytest
 
-from mmng_ui.reader import ParseLine, PocsagMessage
-
+from mmng_ui.reader import ParseLine, PocsagMessage, frag
 
 FLEX_LINES = """FLEX: 2024-12-08 21:18:16 3200/4/D 03.096 [4294947544] UNK 00136080 001794b2 00193e1c 0015db79 0004e703 000136bd 00194da5 001b8f04 001846e3 001e8f83 001d7d3b 000ae060 00026bc2 001ffff3 001421c8
 FLEX|2024-12-08 21:18:16|3200/4/F/D|03.096|002064197|ALN|
@@ -75,7 +72,12 @@ def sample_json_data_flex():
 
 @pytest.fixture(params=FLEX_LINES.splitlines())
 def flex_lines(request):
-    yield request.param
+    return request.param
+
+
+@pytest.fixture(autouse=True)
+def clear_frag():
+    frag.clear()
 
 
 def test_POCSAG_parse_line(sample_data):
@@ -114,46 +116,33 @@ def test_parse_line_invalid_not_json():
     assert json_detected is True
 
 
-@pytest.mark.skip(reason='Untestable for now')
 def test_POCSAG_handling_numeric_message():
-    line = 'Numeric Message 1234'
+    line = '2024-09-23 12:38:00: POCSAG512: Address:  1234567  Function: 0  Numeric:  1234'
     parse_line = ParseLine()
-    timestamp, address, message, trim_message, json_detected = parse_line.parse(line)
-    assert timestamp is None
-    assert address == ''
-    assert message == '1234'
-    assert trim_message == '1234'
+    result, json_detected = parse_line.parse(line)
+    assert result.address == '12345670'
+    assert result.trim_message == '1234'
+    assert json_detected is False
 
 
-@pytest.mark.skip(reason='Untestable for now')
 def test_FLEX_handling_fragmented_message():
-    line1 = 'FLEX [123] Fragmented Message 01/2022 F/ ALN ...[ |]'
-    line2 = 'FLEX [123] Continued Message 02/2022 C/'
+    line1 = 'FLEX|2024-12-08 21:18:46|3200/4/F/F|04.063|4294942723|ALN|part1'
+    line2 = 'FLEX|2024-12-08 21:18:46|3200/4/C/C|04.063|4294942723|ALN|part2'
     parse_line = ParseLine()
-    fragment_address = None
-    for line in [line1, line2]:
-        timestamp, address, message, trim_message = parse_line.parse(line)
-        if not fragment_address:
-            fragment_address = address
-            assert address == '123'
-            assert message is None  # First message should be empty
-            continue
 
-        assert timestamp is None
-        assert address == ''
-        assert message == frag[fragment_address]
-        del frag[fragment_address]
+    result1, _ = parse_line.parse(line1)
+    assert result1.trim_message is None  # stored in frag, not returned (empty string becomes None)
+
+    result2, _ = parse_line.parse(line2)
+    assert result2.trim_message == 'part1part2'
 
 
-@pytest.mark.skip(reason='Untestable for now')
 def test_FLEX_handling_complete_message():
-    line = 'FLEX [123] Complete Message 2022-09-01 12:34:56'
+    line = 'FLEX|2024-12-08 21:18:46|3200/4/C/C|04.063|4294942723|ALN|nsult LOPEZ PEREZ 31373343'
     parse_line = ParseLine()
-    timestamp, address, message, trim_message = parse_line.parse(line)
-    assert timestamp == Moment.date('2022-09-01 12:34:56', 'YYYY-MM-DD HH:mm:ss')
-    assert address == ''
-    assert message == ''
-    assert trim_message is None
+    result, json_detected = parse_line.parse(line)
+    assert result.trim_message == 'nsult LOPEZ PEREZ 31373343'
+    assert json_detected is False
 
 
 def test_default_case():
@@ -166,16 +155,22 @@ def test_default_case():
     assert result.trim_message == None
 
 
-@pytest.mark.skip(reason='Untestable for now')
-def test_FLEX_parse_line(flex_lines):
-    """Test for GitHub issue https://github.com/lingfish/mmng-ui/issues/3"""
-
+def test_FLEX_parse_line_smoke(flex_lines):
+    """Smoke test for FLEX lines - ensure no exceptions and correct return type"""
     parse_line = ParseLine()
-    # result, json_detected = parse_line.parse('FLEX|2024-12-08 21:18:46|3200/4/C/C|04.063|4294942723|ALN|nsult LOPEZ PEREZ 31373343 h/o spinal compression fx\'s MRI 12/7 subacute compression deformities, no evidence of cord compression. Pt neurologically intact. any acute surgical intervention? - Donald Thommes 6314176868 [68]3fL')
     result, json_detected = parse_line.parse(flex_lines)
-    # assert result.address == '4294942723'
-    # assert result.timestamp == moment.date(2024, 12, 8, 21, 18, 46)
-    print(result)
+    # Just check that we get the expected return types
+    assert isinstance(result, PocsagMessage)
+    assert isinstance(json_detected, bool)
+
+
+def test_FLEX_parse_line_known_aln_message():
+    """Test for the specific ALN message line from FLEX_LINES line 29"""
+    line = 'FLEX|2024-12-08 21:18:46|3200/4/C/C|04.063|4294942723|ALN|nsult LOPEZ PEREZ 31373343 h/o spinal compression fx\'s MRI 12/7 subacute compression deformities, no evidence of cord compression. Pt neurologically intact. any acute surgical intervention? - Donald Thommes 6314176868 [68]3fL'
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(line)
+    assert result.address == '4294942723'
+    assert result.timestamp == moment.date(2024, 12, 8, 21, 18, 46)
     assert (
             result.trim_message
             == 'nsult LOPEZ PEREZ 31373343 h/o spinal compression fx\'s MRI 12/7 subacute compression deformities, no evidence of cord compression. Pt neurologically intact. any acute surgical intervention? - Donald Thommes 6314176868 [68]3fL'

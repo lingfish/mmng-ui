@@ -25,7 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 web = [
-  "textual-serve==1.1.2",
+    "textual-serve==1.1.2",
 ]
 
 [project.scripts]
@@ -47,11 +47,22 @@ only-packages = true
 [tool.hatch.envs.dev]
 extra-dependencies = [
     "textual-dev",
+    "pytest",
+    "coverage",
+]
+
+[tool.hatch.envs.hatch-test]
+extra-dependencies = [
+    "pytest",
+    "pytest-asyncio",
 ]
 
 [tool.hatch.version.raw-options]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source_pkgs = ["mmng_ui", "tests"]
