@@ -1,3 +1,5 @@
+import importlib
+import sys
 
 import pytest
 from textual.app import App, ComposeResult
@@ -9,9 +11,11 @@ from mmng_ui.pocsag import (
     Executable,
     HelpScreen,
     MainScreen,
+    MsgsPerSecond,
     OutputMessage,
     Status,
     StatusWidget,
+    _serve_mode,
 )
 
 
@@ -392,3 +396,152 @@ async def test_key_binding_quit():
         await pilot.press('q')
         await pilot.pause()
         assert not pilot.app.is_running
+
+
+# Tests for MsgsPerSecond.update_graph
+class MsgsPerSecondApp(App):
+    def compose(self) -> ComposeResult:
+        yield MsgsPerSecond()
+
+
+@pytest.mark.asyncio
+async def test_msgspersecond_update_graph_appends_count():
+    """Test MsgsPerSecond.update_graph appends count and resets message_count."""
+    async with MsgsPerSecondApp().run_test() as pilot:
+        mps = pilot.app.screen.query_one(MsgsPerSecond)
+        pilot.app.message_count = [10, 20, 30]
+        mps.update_graph()
+        assert mps.data[-1] == 3
+        assert pilot.app.message_count == []
+
+
+@pytest.mark.asyncio
+async def test_msgspersecond_update_graph_keeps_last_60():
+    """Test MsgsPerSecond.update_graph keeps only last 60 elements."""
+    async with MsgsPerSecondApp().run_test() as pilot:
+        mps = pilot.app.screen.query_one(MsgsPerSecond)
+        pilot.app.message_count = list(range(70))
+        mps.update_graph()
+        assert len(mps.data) <= 60
+        assert mps.data[-1] == 70
+
+
+# Tests for MainScreen.read_process_output
+class MockStreamReader:
+    def __init__(self, lines: list[bytes]):
+        self._lines = lines
+        self._idx = 0
+
+    async def readline(self):
+        if self._idx < len(self._lines):
+            line = self._lines[self._idx]
+            self._idx += 1
+            return line
+        return b''
+
+
+@pytest.mark.asyncio
+async def test_read_process_output_yields_decoded_lines():
+    """Test MainScreen.read_process_output yields decoded lines."""
+    async with MainScreenTestApp().run_test() as pilot:
+        screen = pilot.app.screen
+        mock_stream = MockStreamReader([b'hello world\n', b''])
+        results = []
+        async for line in screen.read_process_output(mock_stream):
+            results.append(line)
+        assert results == ['hello world']
+
+
+@pytest.mark.asyncio
+async def test_read_process_output_breaks_on_empty():
+    """Test MainScreen.read_process_output breaks on empty line."""
+    async with MainScreenTestApp().run_test() as pilot:
+        screen = pilot.app.screen
+        mock_stream = MockStreamReader([b''])
+        results = []
+        async for line in screen.read_process_output(mock_stream):
+            results.append(line)
+        assert results == []
+
+
+@pytest.mark.asyncio
+async def test_read_process_output_sets_status_receiver():
+    """Test MainScreen.read_process_output sets status receiver."""
+    async with MainScreenTestApp().run_test() as pilot:
+        screen = pilot.app.screen
+        status = screen.query_one('#status')
+        mock_stream = MockStreamReader([b'test line\n', b''])
+        async for _ in screen.read_process_output(mock_stream):
+            pass
+        assert status.receiver == '[blink bold bright_green]receiving[/]'
+
+
+# Tests for MainScreen.recalc_width
+@pytest.mark.asyncio
+async def test_recalc_width_sets_message_column_width():
+    """Test MainScreen.recalc_width sets message column width correctly."""
+    async with MainScreenTestApp().run_test() as pilot:
+        screen = pilot.app.screen
+        table = screen.query_one('#messages')
+        table.add_row('12:00:00', '123456', 'test message')
+        screen.recalc_width(table)
+        assert table.columns['message'].auto_width is False
+        assert isinstance(table.columns['message'].width, int)
+        assert table.columns['message'].width > 0
+
+
+# Tests for _serve_mode
+def test_serve_mode_starts_server(monkeypatch):
+    """Test _serve_mode starts server with correct parameters."""
+    server_args = {}
+
+    class MockServer:
+        def __init__(self, command, host, port, public_url):
+            server_args.update(command=command, host=host, port=port, public_url=public_url)
+        def serve(self):
+            server_args['served'] = True
+
+    mock_module = type(sys)('textual_serve')
+    mock_module.server = type(sys)('server')
+    mock_module.server.Server = MockServer
+    monkeypatch.setitem(sys.modules, 'textual_serve', mock_module)
+    monkeypatch.setitem(sys.modules, 'textual_serve.server', mock_module.server)
+    monkeypatch.setattr('socket.getfqdn', lambda: 'myhost')
+
+    _serve_mode('0.0.0.0', 8000)
+    assert server_args['command'] == 'mmng-ui'
+    assert server_args['host'] == '0.0.0.0'
+    assert server_args['port'] == 8000
+    assert server_args['public_url'] == 'http://myhost:8000'
+    assert server_args['served'] is True
+
+    # Test with localhost
+    server_args.clear()
+    _serve_mode('localhost', 8000)
+    assert server_args['public_url'] == 'http://localhost:8000'
+
+
+def test_serve_mode_missing_dependency_exits(monkeypatch):
+    """Test _serve_mode exits when textual-serve is missing."""
+    def mock_import(name, *args, **kwargs):
+        if name == 'textual_serve':
+            raise ImportError("No module named 'textual_serve'")
+        return importlib.__import__(name, *args, **kwargs)
+
+    echo_messages = []
+    def mock_echo(message, err=False):
+        echo_messages.append(message)
+
+    exit_code = []
+    def mock_exit(code):
+        exit_code.append(code)
+
+    monkeypatch.setattr('builtins.__import__', mock_import)
+    monkeypatch.setattr('click.echo', mock_echo)
+    monkeypatch.setattr('sys.exit', mock_exit)
+
+    _serve_mode(None, 8000)
+
+    assert len(echo_messages) == 1
+    assert 'textual-serve is not installed' in echo_messages[0]
+    assert exit_code == [1]
