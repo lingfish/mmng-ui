@@ -42,9 +42,6 @@ graphify-out/
 src/mmng_ui/_version.py
 
 # Stray dev files
-Pipfile
 Pipfile.lock
 fullscreen.py
 sample.txt
-re
-sys
