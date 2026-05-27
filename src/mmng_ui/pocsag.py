@@ -367,12 +367,8 @@ class MainScreen(Screen):
         self.parse_line = ParseLine()
 
         # Run multimon-ng, grab version and JSON support
-        mmng_help_process = await asyncio.create_subprocess_exec(self.app.mmng_binary, '-h', stderr=PIPE)
-        mmng_help = await mmng_help_process.stderr.read()
-        await mmng_help_process.wait()
-        mmng_text = mmng_help.decode()
-        json_capable = '--json' in mmng_text
-        self.app.mmng.version = mmng_text.splitlines()[0].split()[1]
+        version, json_capable = await self._detect_mmng_version()
+        self.app.mmng.version = version
         log.write(f'multimon-ng version: {self.app.mmng.version}')
         log.write(f'JSON capable: {json_capable}')
 
@@ -388,6 +384,16 @@ class MainScreen(Screen):
         self.log('About to start multimon')
         self.stream_subprocess(self.app.mmng_binary, mmng_args)
         self.log('AFTER: About to start multimon')
+
+    async def _detect_mmng_version(self) -> tuple[str, bool]:
+        """Returns (version_string, json_capable)."""
+        mmng_help_process = await asyncio.create_subprocess_exec(self.app.mmng_binary, '-h', stderr=PIPE)
+        mmng_help = await mmng_help_process.stderr.read()
+        await mmng_help_process.wait()
+        mmng_text = mmng_help.decode()
+        json_capable = '--json' in mmng_text
+        version = mmng_text.splitlines()[0].split()[1]
+        return version, json_capable
 
     @work(exclusive=True)
     async def stream_subprocess(self, command, args):
@@ -560,6 +566,22 @@ class Pocsag(App):
 
 
 
+def _serve_mode(host: str | None, port: int) -> None:
+    """Handle serve mode logic."""
+    try:
+        import socket
+        from textual_serve.server import Server
+        if host == 'localhost':
+            public_url = f'http://localhost:{port}'
+        else:
+            public_url = f'http://{socket.getfqdn()}:{port}'
+        server = Server(command='mmng-ui', host=host, port=port, public_url=public_url)
+        server.serve()
+    except ImportError:
+        click.echo('Error: textual-serve is not installed.  Please install mmng-ui via "pipx install mmng-ui[web]"', err=True)
+        sys.exit(1)
+
+
 @click.command(context_settings={'show_default': True})
 @click.option('--mmng-binary', '-m', required=False, default='multimon-ng', help='Path to multimon-ng binary')
 @click.option('--sox-binary', '-s', required=False, default='sox', help='Path to sox binary (this does not imply that sox will run')
@@ -585,20 +607,7 @@ def main(mmng_binary, sox_binary, sox_rate, port, charset, serve, serve_host, se
             serve_host = None
         if not serve_port:
             serve_port = 8000
-
-        try:
-            import socket
-
-            from textual_serve.server import Server
-            if serve_host == 'localhost':
-                public_url = f'http://localhost:{serve_port}'
-            else:
-                public_url = f'http://{socket.getfqdn()}:{serve_port}'
-            server = Server(command='mmng-ui', host=serve_host, port=serve_port, public_url=public_url)
-            server.serve()
-        except ImportError:
-            click.echo('Error: textual-serve is not installed.  Please install mmng-ui via "pipx install mmng-ui[web]"', err=True)
-            sys.exit(1)
+        _serve_mode(serve_host, serve_port)
 
     else:
         if not shutil.which(mmng_binary):
