@@ -570,6 +570,7 @@ def _serve_mode(host: str | None, port: int) -> None:
     """Handle serve mode logic."""
     try:
         import socket
+
         from textual_serve.server import Server
         if host == 'localhost':
             public_url = f'http://localhost:{port}'
