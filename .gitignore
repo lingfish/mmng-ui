@@ -1,0 +1,47 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Packages
+*.egg-info/
+dist/
+build/
+
+# Test & coverage
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Project-specific artifacts
+graphify-out/
+
+# IDE
+.idea/
+
+# Agent config
+.opencode/
+
+# OS
+.DS_Store
+
+# Editors
+*.swp
+*.swo
+
+# Audio samples
+*.wav
+
+# Stray dev files
+Pipfile
+Pipfile.lock
+fullscreen.py
+sample.txt
+re
+sys

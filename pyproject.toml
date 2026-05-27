@@ -8,13 +8,24 @@ dynamic = ["version"]
 authors = [
     { name="Jason Lingohr", email="jason@lucid.net.au" },
 ]
-description = "The textual user interface to multimon-ng."
+description = "A Textual TUI for multimon-ng — decode POCSAG and FLEX pager messages from SDR applications in your terminal or web browser."
 readme = "README.md"
 requires-python = ">=3.10"
+keywords = ["pocsag", "flex", "pager", "multimon-ng", "sdr", "textual", "tui", "ham-radio", "decoder"]
+license = "GPL-3.0-or-later"
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console :: Curses",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Ham Radio",
+    "Topic :: Utilities",
 ]
 dependencies = [
     "click==8.3.0",
@@ -34,6 +45,8 @@ mmng-ui = "mmng_ui.pocsag:main"
 [project.urls]
 Homepage = "https://github.com/lingfish/mmng-ui"
 Issues = "https://github.com/lingfish/mmng-ui/issues"
+Changelog = "https://github.com/lingfish/mmng-ui/blob/main/CHANGELOG.md"
+CI = "https://gitlab.lucid.net.au/lucid/mmng-ui"
 
 [tool.hatch.version]
 source = "vcs"
