@@ -433,13 +433,16 @@ class MainScreen(Screen):
 
     async def _detect_mmng_version(self) -> tuple[str, bool]:
         """Returns (version_string, json_capable)."""
-        mmng_help_process = await asyncio.create_subprocess_exec(self.app.mmng_binary, '-h', stderr=PIPE)
-        mmng_help = await mmng_help_process.stderr.read()
-        await mmng_help_process.wait()
-        mmng_text = mmng_help.decode()
-        json_capable = '--json' in mmng_text
-        version = mmng_text.splitlines()[0].split()[1]
-        return version, json_capable
+        try:
+            mmng_help_process = await asyncio.create_subprocess_exec(self.app.mmng_binary, '-h', stderr=PIPE)
+            mmng_help = await mmng_help_process.stderr.read()
+            await mmng_help_process.wait()
+            mmng_text = mmng_help.decode()
+            json_capable = '--json' in mmng_text
+            version = mmng_text.splitlines()[0].split()[1]
+            return version, json_capable
+        except OSError:
+            return '0.0.0', False
 
 
 class Pocsag(App):
