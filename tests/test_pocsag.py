@@ -237,11 +237,7 @@ class MainScreenTestApp(App):
         self._streaming_disabled = True
 
     def on_mount(self) -> None:
-        screen = MainScreen()
-        async def noop_on_mount():
-            pass
-        screen.on_mount = noop_on_mount
-        self.push_screen(screen)
+        self.push_screen(MainScreen())
 
 
 @pytest.mark.asyncio
@@ -346,11 +342,7 @@ class ActionTestApp(App):
         self.push_screen('about')
 
     def on_mount(self) -> None:
-        screen = MainScreen()
-        async def noop_on_mount():
-            pass
-        screen.on_mount = noop_on_mount
-        self.push_screen(screen)
+        self.push_screen(MainScreen())
 
 
 @pytest.mark.asyncio
@@ -676,11 +668,7 @@ class MultiPortTestApp(App):
         self._streaming_disabled = True
 
     def on_mount(self) -> None:
-        screen = MainScreen()
-        async def noop_on_mount():
-            pass
-        screen.on_mount = noop_on_mount
-        self.push_screen(screen)
+        self.push_screen(MainScreen())
 
 
 @pytest.mark.asyncio
