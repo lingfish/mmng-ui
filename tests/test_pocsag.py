@@ -2,13 +2,15 @@ import importlib
 import sys
 
 import pytest
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.message import Message
-from textual.widgets import Digits, Footer, Header, Markdown
+from textual.widgets import Digits, Footer, Header, Markdown, TabbedContent, TabPane
 
 from mmng_ui.pocsag import (
     AboutScreen,
     Executable,
+    FeedWidget,
     HelpScreen,
     MainScreen,
     MsgsPerSecond,
@@ -16,6 +18,7 @@ from mmng_ui.pocsag import (
     Status,
     StatusWidget,
     _serve_mode,
+    parse_ports,
 )
 
 
@@ -220,44 +223,49 @@ async def test_about_screen_dismiss_q():
 
 # MainScreen compose and on_mount tests
 class MainScreenTestApp(App):
-    def __init__(self):
+    def __init__(self, ports=None):
         super().__init__()
         self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
         self.mmng_binary = 'multimon-ng'
         self.sox_binary = None
         self.sox_rate = None
         self.charset = 'US'
-        self.port = 8888
+        self.ports = ports or [8888]
         self.message_count = []
+        self.json_capable = True
+        self.mmng.version = '1.4.0'
+        self._streaming_disabled = True
 
     def on_mount(self) -> None:
         screen = MainScreen()
-        async def mock_detect():
-            return '1.4.0', True
-        screen._detect_mmng_version = mock_detect
-        def mock_stream(*args, **kwargs):
+        async def noop_on_mount():
             pass
-        screen.stream_subprocess = mock_stream
+        screen.on_mount = noop_on_mount
         self.push_screen(screen)
 
 
 @pytest.mark.asyncio
 async def test_main_screen_compose():
-    """Test MainScreen composes all expected widgets."""
+    """Test MainScreen composes Header, Footer, and TabbedContent with FeedWidgets."""
     async with MainScreenTestApp().run_test() as pilot:
         await pilot.pause()
         header = pilot.app.screen.query_one(Header)
         footer = pilot.app.screen.query_one(Footer)
-        messages_table = pilot.app.screen.query_one('#messages')
-        log_widget = pilot.app.screen.query_one('#log')
-        status_widget = pilot.app.screen.query_one('#status')
-        sparkline = pilot.app.screen.query_one('#spark')
+        tab_content = pilot.app.screen.query_one(TabbedContent)
         assert header is not None
         assert footer is not None
+        assert tab_content is not None
+
+        messages_table = pilot.app.screen.query_one('#messages-8888')
+        log_widget = pilot.app.screen.query_one('#log-8888')
+        status_widget = pilot.app.screen.query_one('#status-8888')
+        sparkline = pilot.app.screen.query_one('#spark-8888')
+        mps = pilot.app.screen.query_one('#msgs-per-second-8888')
         assert messages_table is not None
         assert log_widget is not None
         assert status_widget is not None
         assert sparkline is not None
+        assert mps is not None
 
 
 @pytest.mark.asyncio
@@ -265,7 +273,7 @@ async def test_main_screen_on_mount_sets_columns():
     """Test MainScreen.on_mount sets up DataTable columns correctly."""
     async with MainScreenTestApp().run_test() as pilot:
         await pilot.pause()
-        table = pilot.app.screen.query_one('#messages')
+        table = pilot.app.screen.query_one('#messages-8888')
         assert 'time' in table.columns
         assert 'address' in table.columns
         assert 'message' in table.columns
@@ -277,31 +285,31 @@ async def test_main_screen_on_mount_sets_columns():
 # MainScreen on_output_message tests
 @pytest.mark.asyncio
 async def test_main_screen_on_output_message_adds_row():
-    """Test MainScreen.on_output_message adds row to DataTable for valid message."""
+    """Test FeedWidget adds row to DataTable for valid message."""
     async with MainScreenTestApp().run_test() as pilot:
         await pilot.pause()
         test_line = (
             '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
         )
-        screen = pilot.app.screen
-        screen.post_message(OutputMessage(test_line))
+        feed = pilot.app.screen.query_one(FeedWidget)
+        feed.post_message(OutputMessage(test_line))
         await pilot.pause()
-        table = pilot.app.screen.query_one('#messages')
+        table = pilot.app.screen.query_one('#messages-8888')
         assert len(list(table.rows)) == 1
         row_key = list(table.rows.keys())[0]
         cells = table.get_row(row_key)
-        assert cells[2] == 'test message'
+        assert cells[2] == Text('test message', overflow='fold')
 
 
 @pytest.mark.asyncio
 async def test_main_screen_on_output_message_no_message():
-    """Test MainScreen.on_output_message logs warning for invalid message."""
+    """Test FeedWidget logs warning for invalid message."""
     async with MainScreenTestApp().run_test() as pilot:
         await pilot.pause()
-        screen = pilot.app.screen
-        screen.post_message(OutputMessage('garbage input'))
+        feed = pilot.app.screen.query_one(FeedWidget)
+        feed.post_message(OutputMessage('garbage input'))
         await pilot.pause()
-        table = pilot.app.screen.query_one('#messages')
+        table = pilot.app.screen.query_one('#messages-8888')
         assert len(list(table.rows)) == 0
 
 
@@ -317,31 +325,31 @@ class ActionTestApp(App):
     ]
     SCREENS = {'help': HelpScreen, 'about': AboutScreen}
 
-    def __init__(self):
+    def __init__(self, ports=None):
         super().__init__()
         self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
         self.mmng_binary = 'multimon-ng'
         self.sox_binary = None
         self.sox_rate = None
         self.charset = 'US'
-        self.port = 8888
+        self.ports = ports or [8888]
         self.message_count = []
+        self.json_capable = True
+        self.mmng.version = '1.4.0'
+        self._streaming_disabled = True
 
     def action_clear_screen(self):
-        self.screen.query_one('#messages').clear()
-        self.screen.query_one('#log').clear()
+        for feed in self.screen.query(FeedWidget):
+            feed.clear()
 
     def action_about(self):
         self.push_screen('about')
 
     def on_mount(self) -> None:
         screen = MainScreen()
-        async def mock_detect():
-            return '1.4.0', True
-        screen._detect_mmng_version = mock_detect
-        def mock_stream(*args, **kwargs):
+        async def noop_on_mount():
             pass
-        screen.stream_subprocess = mock_stream
+        screen.on_mount = noop_on_mount
         self.push_screen(screen)
 
 
@@ -351,7 +359,7 @@ async def test_action_clear_screen():
     async with ActionTestApp().run_test() as pilot:
         await pilot.pause()
 
-        table = pilot.app.screen.query_one('#messages')
+        table = pilot.app.screen.query_one('#messages-8888')
         table.add_row('12:00:00', '123456', 'test message')
         await pilot.pause()
 
@@ -362,7 +370,7 @@ async def test_action_clear_screen():
 
         assert len(list(table.rows)) == 0
 
-        log = pilot.app.screen.query_one('#log')
+        log = pilot.app.screen.query_one('#log-8888')
         assert len(log.lines) == 0
 
 
@@ -400,8 +408,12 @@ async def test_key_binding_quit():
 
 # Tests for MsgsPerSecond.update_graph
 class MsgsPerSecondApp(App):
+    def __init__(self):
+        super().__init__()
+        self.message_count = []
+
     def compose(self) -> ComposeResult:
-        yield MsgsPerSecond()
+        yield MsgsPerSecond(message_count_ref=self.message_count)
 
 
 @pytest.mark.asyncio
@@ -409,7 +421,7 @@ async def test_msgspersecond_update_graph_appends_count():
     """Test MsgsPerSecond.update_graph appends count and resets message_count."""
     async with MsgsPerSecondApp().run_test() as pilot:
         mps = pilot.app.screen.query_one(MsgsPerSecond)
-        pilot.app.message_count = [10, 20, 30]
+        pilot.app.message_count.extend([10, 20, 30])
         mps.update_graph()
         assert mps.data[-1] == 3
         assert pilot.app.message_count == []
@@ -420,7 +432,7 @@ async def test_msgspersecond_update_graph_keeps_last_60():
     """Test MsgsPerSecond.update_graph keeps only last 60 elements."""
     async with MsgsPerSecondApp().run_test() as pilot:
         mps = pilot.app.screen.query_one(MsgsPerSecond)
-        pilot.app.message_count = list(range(70))
+        pilot.app.message_count.extend(range(70))
         mps.update_graph()
         assert len(mps.data) <= 60
         assert mps.data[-1] == 70
@@ -442,52 +454,58 @@ class MockStreamReader:
 
 @pytest.mark.asyncio
 async def test_read_process_output_yields_decoded_lines():
-    """Test MainScreen.read_process_output yields decoded lines."""
+    """Test FeedWidget.read_process_output yields decoded lines."""
     async with MainScreenTestApp().run_test() as pilot:
-        screen = pilot.app.screen
+        await pilot.pause()
+        feed = pilot.app.screen.query_one(FeedWidget)
         mock_stream = MockStreamReader([b'hello world\n', b''])
         results = []
-        async for line in screen.read_process_output(mock_stream):
+        async for line in feed.read_process_output(mock_stream):
             results.append(line)
         assert results == ['hello world']
 
 
 @pytest.mark.asyncio
 async def test_read_process_output_breaks_on_empty():
-    """Test MainScreen.read_process_output breaks on empty line."""
+    """Test FeedWidget.read_process_output breaks on empty line."""
     async with MainScreenTestApp().run_test() as pilot:
-        screen = pilot.app.screen
+        await pilot.pause()
+        feed = pilot.app.screen.query_one(FeedWidget)
         mock_stream = MockStreamReader([b''])
         results = []
-        async for line in screen.read_process_output(mock_stream):
+        async for line in feed.read_process_output(mock_stream):
             results.append(line)
         assert results == []
 
 
 @pytest.mark.asyncio
 async def test_read_process_output_sets_status_receiver():
-    """Test MainScreen.read_process_output sets status receiver."""
+    """Test FeedWidget.read_process_output sets status receiver."""
     async with MainScreenTestApp().run_test() as pilot:
-        screen = pilot.app.screen
-        status = screen.query_one('#status')
+        await pilot.pause()
+        feed = pilot.app.screen.query_one(FeedWidget)
+        status = feed.query_one('#status-8888')
         mock_stream = MockStreamReader([b'test line\n', b''])
-        async for _ in screen.read_process_output(mock_stream):
+        async for _ in feed.read_process_output(mock_stream):
             pass
         assert status.receiver == '[blink bold bright_green]receiving[/]'
 
 
-# Tests for MainScreen.recalc_width
+# Tests for MainScreen.on_output_message scroll
 @pytest.mark.asyncio
-async def test_recalc_width_sets_message_column_width():
-    """Test MainScreen.recalc_width sets message column width correctly."""
+async def test_on_output_message_scrolls_to_bottom():
+    """Test FeedWidget scrolls to bottom after adding a row."""
     async with MainScreenTestApp().run_test() as pilot:
-        screen = pilot.app.screen
-        table = screen.query_one('#messages')
-        table.add_row('12:00:00', '123456', 'test message')
-        screen.recalc_width(table)
-        assert table.columns['message'].auto_width is False
-        assert isinstance(table.columns['message'].width, int)
-        assert table.columns['message'].width > 0
+        await pilot.pause()
+        test_line = (
+            '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
+        )
+        feed = pilot.app.screen.query_one(FeedWidget)
+        feed.post_message(OutputMessage(test_line))
+        await pilot.pause()
+        table = pilot.app.screen.query_one('#messages-8888')
+        assert len(list(table.rows)) == 1
+        assert table.scroll_y == table.max_scroll_y
 
 
 # Tests for _serve_mode
@@ -545,3 +563,152 @@ def test_serve_mode_missing_dependency_exits(monkeypatch):
     assert len(echo_messages) == 1
     assert 'textual-serve is not installed' in echo_messages[0]
     assert exit_code == [1]
+
+
+# --- parse_ports tests ---
+
+def test_parse_ports_single():
+    """Test parse_ports with a single port."""
+    assert parse_ports('8888') == [8888]
+
+
+def test_parse_ports_multiple():
+    """Test parse_ports with multiple ports."""
+    assert parse_ports('8888,8889,8890') == [8888, 8889, 8890]
+
+
+def test_parse_ports_with_spaces():
+    """Test parse_ports handles spaces."""
+    assert parse_ports('8888, 8889') == [8888, 8889]
+
+
+def test_parse_ports_invalid():
+    """Test parse_ports raises ValueError for invalid input."""
+    with pytest.raises(ValueError):
+        parse_ports('abc')
+
+
+def test_parse_ports_empty():
+    """Test parse_ports raises ValueError for empty string."""
+    with pytest.raises(ValueError):
+        parse_ports('')
+
+
+# --- FeedWidget compose tests ---
+
+class FeedWidgetTestApp(App):
+    def __init__(self):
+        super().__init__()
+        self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
+        self.mmng_binary = 'multimon-ng'
+        self.sox_binary = None
+        self.sox_rate = None
+        self.charset = 'US'
+        self.ports = [8888]
+        self.message_count = []
+        self.json_capable = True
+        self.mmng.version = '1.4.0'
+        self._streaming_disabled = True
+
+
+@pytest.mark.asyncio
+async def test_feed_widget_compose():
+    """Test FeedWidget composes all expected widgets with port-specific IDs."""
+    async with FeedWidgetTestApp().run_test() as pilot:
+        screen = pilot.app.screen
+        feed = FeedWidget(port=8888)
+        screen.mount(feed)
+        await pilot.pause()
+
+        messages_table = feed.query_one('#messages-8888')
+        log_widget = feed.query_one('#log-8888')
+        status_widget = feed.query_one('#status-8888')
+        sparkline = feed.query_one('#spark-8888')
+        mps = feed.query_one('#msgs-per-second-8888')
+
+        assert messages_table is not None
+        assert log_widget is not None
+        assert status_widget is not None
+        assert sparkline is not None
+        assert mps is not None
+
+        assert str(messages_table.columns['time'].label) == 'Time'
+        assert str(messages_table.columns['address'].label) == 'Address'
+        assert str(messages_table.columns['message'].label) == 'Message'
+
+
+@pytest.mark.asyncio
+async def test_feed_widget_clear():
+    """Test FeedWidget.clear clears table and log."""
+    async with MainScreenTestApp().run_test() as pilot:
+        await pilot.pause()
+        feed = pilot.app.screen.query_one(FeedWidget)
+        table = feed.query_one('#messages-8888')
+        table.add_row('12:00:00', '123456', 'test message')
+        log = feed.query_one('#log-8888')
+        log.write('test log entry')
+        await pilot.pause()
+
+        assert len(list(table.rows)) == 1
+        assert len(log.lines) == 1
+
+        feed.clear()
+        await pilot.pause()
+
+        assert len(list(table.rows)) == 0
+        assert len(log.lines) == 0
+
+
+# --- Multi-port tab tests ---
+
+class MultiPortTestApp(App):
+    def __init__(self, ports=None):
+        super().__init__()
+        self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
+        self.mmng_binary = 'multimon-ng'
+        self.sox_binary = None
+        self.sox_rate = None
+        self.charset = 'US'
+        self.ports = ports or [8888, 8889]
+        self.message_count = []
+        self.json_capable = True
+        self.mmng.version = '1.4.0'
+        self._streaming_disabled = True
+
+    def on_mount(self) -> None:
+        screen = MainScreen()
+        async def noop_on_mount():
+            pass
+        screen.on_mount = noop_on_mount
+        self.push_screen(screen)
+
+
+@pytest.mark.asyncio
+async def test_main_screen_multi_port_two_tabs():
+    """Test MainScreen with 2 ports creates 2 tab panes."""
+    async with MultiPortTestApp(ports=[8888, 8889]).run_test() as pilot:
+        await pilot.pause()
+        tabs = pilot.app.screen.query_one(TabbedContent)
+        panes = list(tabs.query(TabPane))
+        assert len(panes) == 2
+        assert panes[0].id == 'tab-8888'
+        assert panes[1].id == 'tab-8889'
+
+        feed1 = panes[0].query_one(FeedWidget)
+        feed2 = panes[1].query_one(FeedWidget)
+        assert feed1.port == 8888
+        assert feed2.port == 8889
+
+        assert panes[0].query_one('#messages-8888') is not None
+        assert panes[1].query_one('#messages-8889') is not None
+
+
+@pytest.mark.asyncio
+async def test_main_screen_single_port_one_tab():
+    """Test MainScreen with 1 port creates 1 tab pane."""
+    async with MultiPortTestApp(ports=[8888]).run_test() as pilot:
+        await pilot.pause()
+        tabs = pilot.app.screen.query_one(TabbedContent)
+        panes = list(tabs.query(TabPane))
+        assert len(panes) == 1
+        assert panes[0].id == 'tab-8888'
