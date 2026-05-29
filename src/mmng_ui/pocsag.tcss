@@ -1,32 +1,34 @@
-#app-grid {
+.feed-grid {
     layout: grid;
     grid-size: 2;
-    grid-columns: 80% 20%;
-    grid-rows: 80% 20%;
+    grid-columns: 4fr 1fr;
+    grid-rows: 4fr 1fr;
+    height: 1fr;
 }
 
-#messages {
-    height: 100%;
+.feed-messages {
     border: green;
     column-span: 2;
     background: black;
 }
 
-#log {
-    height: 100%;
+.feed-log {
     border: darkgreen;
     background: black;
 }
 
-#status {
-    height: 100%;
+.feed-status {
     border: greenyellow;
 }
 
-#status-container {
+.feed-status-container {
     layout: grid;
-    grid-size: 1;  /* one columns */
-    grid-rows: 80% 20%;
+    grid-size: 1;
+    grid-rows: 4fr 1fr;
+}
+
+.feed-mps {
+    height: auto;
 }
 
 HelpScreen, FilterScreen {
