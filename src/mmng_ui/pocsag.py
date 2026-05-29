@@ -483,8 +483,9 @@ class Pocsag(App):
         self.push_screen(MainScreen())
 
     def action_clear_screen(self) -> None:
-        for feed in self.screen.query(FeedWidget):
-            feed.clear()
+        tabs = self.screen.query_one(FeedTabbedContent)
+        if (pane := tabs.active_pane) is not None:
+            pane.query_one(FeedWidget).clear()
 
     def action_about(self) -> None:
         self.push_screen(AboutScreen())

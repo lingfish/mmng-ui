@@ -10,6 +10,7 @@ from textual.widgets import Digits, Footer, Header, Markdown, TabbedContent, Tab
 from mmng_ui.pocsag import (
     AboutScreen,
     Executable,
+    FeedTabbedContent,
     FeedWidget,
     HelpScreen,
     MainScreen,
@@ -335,8 +336,9 @@ class ActionTestApp(App):
         self._streaming_disabled = True
 
     def action_clear_screen(self):
-        for feed in self.screen.query(FeedWidget):
-            feed.clear()
+        tabs = self.screen.query_one(FeedTabbedContent)
+        if (pane := tabs.active_pane) is not None:
+            pane.query_one(FeedWidget).clear()
 
     def action_about(self):
         self.push_screen('about')
@@ -654,6 +656,10 @@ async def test_feed_widget_clear():
 # --- Multi-port tab tests ---
 
 class MultiPortTestApp(App):
+    BINDINGS = [
+        ('c', 'clear_screen', 'Clear'),
+    ]
+
     def __init__(self, ports=None):
         super().__init__()
         self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
@@ -669,6 +675,11 @@ class MultiPortTestApp(App):
 
     def on_mount(self) -> None:
         self.push_screen(MainScreen())
+
+    def action_clear_screen(self):
+        tabs = self.screen.query_one(FeedTabbedContent)
+        if (pane := tabs.active_pane) is not None:
+            pane.query_one(FeedWidget).clear()
 
 
 @pytest.mark.asyncio
@@ -700,3 +711,33 @@ async def test_main_screen_single_port_one_tab():
         panes = list(tabs.query(TabPane))
         assert len(panes) == 1
         assert panes[0].id == 'tab-8888'
+
+
+@pytest.mark.asyncio
+async def test_clear_only_active_tab():
+    """Test action_clear_screen only clears the active tab's feed."""
+    async with MultiPortTestApp(ports=[8888, 8889]).run_test() as pilot:
+        await pilot.pause()
+        tabs = pilot.app.screen.query_one(FeedTabbedContent)
+        panes = list(tabs.query(TabPane))
+        feed1 = panes[0].query_one(FeedWidget)
+        feed2 = panes[1].query_one(FeedWidget)
+        t1 = panes[0].query_one('#messages-8888')
+        t2 = panes[1].query_one('#messages-8889')
+
+        t1.add_row('12:00:00', '123456', 'tab1 msg')
+        t2.add_row('12:00:01', '789012', 'tab2 msg')
+        await pilot.pause()
+
+        assert len(list(t1.rows)) == 1
+        assert len(list(t2.rows)) == 1
+
+        # Switch to second tab by clicking it
+        await pilot.click('#--content-tab-tab-8889')
+        await pilot.pause()
+
+        await pilot.press('c')
+        await pilot.pause()
+
+        assert len(list(t2.rows)) == 0, 'active tab should be cleared'
+        assert len(list(t1.rows)) == 1, 'inactive tab should not be cleared'
