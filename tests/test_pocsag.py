@@ -7,6 +7,7 @@ from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widgets import Digits, Footer, Header, Markdown, TabbedContent, TabPane
 
+from mmng_ui.capcode_db import CapcodeDB
 from mmng_ui.pocsag import (
     AboutScreen,
     Executable,
@@ -224,7 +225,7 @@ async def test_about_screen_dismiss_q():
 
 # MainScreen compose and on_mount tests
 class MainScreenTestApp(App):
-    def __init__(self, ports=None):
+    def __init__(self, ports=None, capcode_db=None):
         super().__init__()
         self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
         self.mmng_binary = 'multimon-ng'
@@ -236,6 +237,7 @@ class MainScreenTestApp(App):
         self.json_capable = True
         self.mmng.version = '1.4.0'
         self._streaming_disabled = True
+        self.capcode_db = capcode_db
 
     def on_mount(self) -> None:
         self.push_screen(MainScreen())
@@ -310,6 +312,53 @@ async def test_main_screen_on_output_message_no_message():
         assert len(list(table.rows)) == 0
 
 
+@pytest.mark.asyncio
+async def test_on_output_message_shows_capcode_alias(tmp_path):
+    """Test FeedWidget shows alias for known capcode address."""
+    json_file = tmp_path / 'test_capcodes.json'
+    json_file.write_text(
+        '{"data": [{"address": "1622020", "alias": "Test Alias", "agency": "TA", "color": "purple", "icon": "fire"}]}'
+    )
+    capcode_db = CapcodeDB.load(json_file)
+    async with MainScreenTestApp(capcode_db=capcode_db).run_test() as pilot:
+        await pilot.pause()
+        test_line = (
+            '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
+        )
+        feed = pilot.app.screen.query_one(FeedWidget)
+        feed.post_message(OutputMessage(test_line))
+        await pilot.pause()
+        table = pilot.app.screen.query_one('#messages-8888')
+        assert len(list(table.rows)) == 1
+        row_key = list(table.rows.keys())[0]
+        cells = table.get_row(row_key)
+        assert 'Test Alias' in str(cells[1])
+        assert '1622020' in str(cells[1])
+        assert '🔥' in str(cells[1])
+
+
+@pytest.mark.asyncio
+async def test_on_output_message_unknown_capcode_shows_raw(tmp_path):
+    """Test FeedWidget shows raw address for unknown capcode."""
+    json_file = tmp_path / 'test_capcodes.json'
+    json_file.write_text('{"data": [{"address": "9999999", "alias": "Other", "agency": "XX"}]}')
+    capcode_db = CapcodeDB.load(json_file)
+    async with MainScreenTestApp(capcode_db=capcode_db).run_test() as pilot:
+        await pilot.pause()
+        test_line = (
+            '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
+        )
+        feed = pilot.app.screen.query_one(FeedWidget)
+        feed.post_message(OutputMessage(test_line))
+        await pilot.pause()
+        table = pilot.app.screen.query_one('#messages-8888')
+        assert len(list(table.rows)) == 1
+        row_key = list(table.rows.keys())[0]
+        cells = table.get_row(row_key)
+        assert '1622020' in str(cells[1])
+        assert 'Other' not in str(cells[1])
+
+
 # Pocsag action and key binding tests
 class ActionTestApp(App):
     """A minimal App with Pocsag bindings/actions and a MainScreen."""
@@ -334,6 +383,7 @@ class ActionTestApp(App):
         self.json_capable = True
         self.mmng.version = '1.4.0'
         self._streaming_disabled = True
+        self.capcode_db = None
 
     def action_clear_screen(self):
         tabs = self.screen.query_one(FeedTabbedContent)
@@ -672,6 +722,7 @@ class MultiPortTestApp(App):
         self.json_capable = True
         self.mmng.version = '1.4.0'
         self._streaming_disabled = True
+        self.capcode_db = None
 
     def on_mount(self) -> None:
         self.push_screen(MainScreen())
