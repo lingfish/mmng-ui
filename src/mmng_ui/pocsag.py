@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from subprocess import PIPE
 
 import click
+from rich.emoji import EMOJI
 from rich.text import Text
 from textual import events, work
 from textual.actions import SkipAction
@@ -398,7 +399,9 @@ FeedWidget {
             raw_address = str(result.address)
             entry = self.capcode_db.lookup(raw_address) if self.capcode_db else None
             if entry:
-                addr_renderable = Text(entry.alias, style=entry.color or '', justify='right')
+                emoji = EMOJI.get(entry.icon, '') if entry.icon else ''
+                prefix = f'{emoji} ' if emoji else ''
+                addr_renderable = Text(f'{prefix}{entry.alias}', style=entry.color or '', justify='right')
                 addr_renderable.append(f' ({raw_address})', style='dim')
             else:
                 addr_renderable = Text(raw_address, justify='right')

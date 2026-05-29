@@ -12,6 +12,7 @@ class CapcodeEntry:
     alias: str
     agency: str | None = None
     color: str | None = None
+    icon: str | None = None
 
 
 class CapcodeDB:
@@ -56,6 +57,7 @@ class CapcodeDB:
                 alias=entry.get('alias', ''),
                 agency=entry.get('agency'),
                 color=entry.get('color'),
+                icon=entry.get('icon'),
             )
 
     def lookup(self, address: str) -> CapcodeEntry | None:

@@ -157,6 +157,27 @@ def test_empty_entries_list_in_json_works(tmp_path):
     assert len(db) == 0
 
 
+def test_entry_with_icon(tmp_path):
+    """Test icon field is captured from JSON data."""
+    json_data = [
+        {"address": "5555555", "alias": "Fire Station", "agency": "FIRE", "icon": "fire"},
+        {"address": "6666666", "alias": "Ambulance", "agency": "AMB", "icon": "ambulance"},
+        {"address": "7777777", "alias": "No Icon", "agency": "TEST"},
+    ]
+    file_path = tmp_path / "test.json"
+    file_path.write_text(json.dumps(json_data))
+    db = CapcodeDB.load(file_path)
+    entry1 = db.lookup("5555555")
+    assert entry1 is not None
+    assert entry1.icon == "fire"
+    entry2 = db.lookup("6666666")
+    assert entry2 is not None
+    assert entry2.icon == "ambulance"
+    entry3 = db.lookup("7777777")
+    assert entry3 is not None
+    assert entry3.icon is None
+
+
 def test_entries_with_missing_optional_fields(tmp_path):
     # Arrange
     json_data = [

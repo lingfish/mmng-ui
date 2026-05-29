@@ -317,7 +317,7 @@ async def test_on_output_message_shows_capcode_alias(tmp_path):
     """Test FeedWidget shows alias for known capcode address."""
     json_file = tmp_path / 'test_capcodes.json'
     json_file.write_text(
-        '{"data": [{"address": "1622020", "alias": "Test Alias", "agency": "TA", "color": "purple"}]}'
+        '{"data": [{"address": "1622020", "alias": "Test Alias", "agency": "TA", "color": "purple", "icon": "fire"}]}'
     )
     capcode_db = CapcodeDB.load(json_file)
     async with MainScreenTestApp(capcode_db=capcode_db).run_test() as pilot:
@@ -334,6 +334,7 @@ async def test_on_output_message_shows_capcode_alias(tmp_path):
         cells = table.get_row(row_key)
         assert 'Test Alias' in str(cells[1])
         assert '1622020' in str(cells[1])
+        assert '🔥' in str(cells[1])
 
 
 @pytest.mark.asyncio
