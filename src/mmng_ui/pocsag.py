@@ -15,7 +15,6 @@ from textual.actions import SkipAction
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Container
-from textual.widget import Widget
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
@@ -36,6 +35,7 @@ from textual.widgets import (
 )
 
 from mmng_ui._version import __version__
+from mmng_ui.capcode_db import CapcodeDB
 from mmng_ui.reader import ParseLine
 
 
@@ -263,9 +263,10 @@ class FeedTabPane(TabPane):
 class FeedWidget(Widget):
     """A widget representing a single POCSAG feed on one UDP port."""
 
-    def __init__(self, port: int, **kwargs):
+    def __init__(self, port: int, capcode_db: CapcodeDB | None = None, **kwargs):
         super().__init__(**kwargs)
         self.port = port
+        self.capcode_db = capcode_db
         self.process = None
         self.sox_process = None
         self.message_count = []
@@ -394,9 +395,16 @@ FeedWidget {
         status.json_mode = json_detected
 
         if result.trim_message:
+            raw_address = str(result.address)
+            entry = self.capcode_db.lookup(raw_address) if self.capcode_db else None
+            if entry:
+                addr_renderable = Text(entry.alias, style=entry.color or '', justify='right')
+                addr_renderable.append(f' ({raw_address})', style='dim')
+            else:
+                addr_renderable = Text(raw_address, justify='right')
             table.add_row(
                 str(result.current_time.strftime('%H:%M:%S')),
-                Text(str(result.address), justify='right'),
+                addr_renderable,
                 Text(result.trim_message, overflow='fold'),
                 height=None,
             )
@@ -419,7 +427,7 @@ class MainScreen(Screen):
         with FeedTabbedContent():
             for port in self.app.ports:
                 with FeedTabPane(f'Port {port}', id=f'tab-{port}'):
-                    yield FeedWidget(port=port)
+                    yield FeedWidget(port=port, capcode_db=self.app.capcode_db)
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -446,12 +454,13 @@ class MainScreen(Screen):
 
 
 class Pocsag(App):
-    def __init__(self, mmng_binary: str, ports: list[int], charset: str, sox_binary: str | None, sox_rate: int | None) -> None:
+    def __init__(self, mmng_binary: str, ports: list[int], charset: str, sox_binary: str | None, sox_rate: int | None, capcode_db: CapcodeDB | None = None) -> None:
         self.mmng_binary = mmng_binary
         self.sox_binary = sox_binary
         self.ports = ports
         self.charset = charset
         self.sox_rate = sox_rate
+        self.capcode_db = capcode_db
         self.mmng = Executable(command=mmng_binary, resolved_path=shutil.which(mmng_binary), version=None)
         if self.sox_binary and self.sox_rate:
             self.sox = Executable(command=sox_binary, resolved_path=shutil.which(sox_binary) or None, version=None)
@@ -521,11 +530,12 @@ def _serve_mode(host: str | None, port: int) -> None:
     default='US',
     help='Charset encoding (case sensitive!)',
 )
+@click.option('--capcodes', '-k', required=False, type=str, help='Path to capcode database (JSON or CSV)')
 @click.option('--serve', required=False, is_flag=True, default=False, help='Serve the app via the web')
 @click.option('--serve-host', required=False, type=str, help='Host/IP to serve the app on (when using --serve)')
 @click.option('--serve-port', required=False, type=int, help='Port to serve the app on (when using --serve)')
 @click.version_option(version=__version__)
-def main(mmng_binary, sox_binary, sox_rate, port, charset, serve, serve_host, serve_port):
+def main(mmng_binary, sox_binary, sox_rate, port, charset, capcodes, serve, serve_host, serve_port):
     if serve or serve_host or serve_port:
         if not serve:
             serve = True
@@ -546,7 +556,8 @@ def main(mmng_binary, sox_binary, sox_rate, port, charset, serve, serve_host, se
                 sys.exit(1)
 
         ports = parse_ports(port)
-        Pocsag(mmng_binary=mmng_binary, sox_binary=sox_binary, sox_rate=sox_rate, ports=ports, charset=charset).run()
+        capcode_db = CapcodeDB.load(capcodes) if capcodes else None
+        Pocsag(mmng_binary=mmng_binary, sox_binary=sox_binary, sox_rate=sox_rate, ports=ports, charset=charset, capcode_db=capcode_db).run()
 
 
 if __name__ == '__main__':
