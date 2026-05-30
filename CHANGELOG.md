@@ -1,13 +1,29 @@
 ## 1.4.0 (2026-05-30)
 
-### added (2 changes)
+### added (5 changes)
 
-- [Save tab to file with CSV, Markdown, and JSON export — press `s` to open the save dialog.](lucid/mmng-ui@b7f8e77b6a5fedfe40df5a9b3e33a92ad4d4a410) ([issue #7](lucid/mmng-ui/-/issues/7))
-- [Tab naming via `--port 8888=Name` syntax and runtime rename with the `r` key.](lucid/mmng-ui@b1655ba9ad1b8fbbe1e4eac0f1cd35d45de0e128)
+- [Multi-feed tab support — listen on multiple UDP ports simultaneously, each decoded in its own tab with independent status, sparkline, and message log.](lucid/mmng-ui@e5b25bd9255d8d184549f76681b18a1ddf3a80ee)
+- [Capcode database support — load known capcodes from JSON or CSV via `--capcodes`/`-k`; matching addresses display a coloured alias with dimmed raw address, unknown ones show raw as before.](lucid/mmng-ui@8c15fd862ce89da6908144bddc59f24975143588)
+- [Emoji icon support for capcode entries — the `icon` field in capcode JSON/CSV (e.g. "fire", "ambulance") renders as a Rich emoji prefix.](lucid/mmng-ui@0283c44ba0aa22dc7f379625bb57058e3cb63e16)
+- [Tab naming — `--port 8888=Name` or `--port 8888:Name` syntax at launch, plus runtime rename of the active tab by pressing `r`.](lucid/mmng-ui@b1655ba6b2b825fe57edbaaec4ce153dca6967fe)
+- [Save tab to file — press `s` to open a save dialog; export the active tab's messages as CSV, Markdown, or JSON.](lucid/mmng-ui@b7f8e77b6a5fedfe40df5a9b3e33a92ad4d4a410) ([issue #7](lucid/mmng-ui/-/issues/7))
 
-### fixed (1 change)
+### fixed (2 changes)
 
-- [Fix blank rows appearing in the DataTable by fixing height constraints.](lucid/mmng-ui@3dbb8610a569420a5aa6e8aa0c0e613b9787dbc6)
+- [Fix DataTable rendering blank rows when few messages exist — moved height from inline Python to CSS.](lucid/mmng-ui@3dbb8610a569420a5aa6e8aa0c0e613b9787dbc6)
+- [Fix 4 previously-skipped tests covering FLEX fragmented/complete messages and POCSAG numeric handling; boost reader.py coverage 54% → 80%.](lucid/mmng-ui@80910668298b48500b2415dc72e59277f4143268)
+
+### changed (2 changes)
+
+- [Improve PyPI metadata — add SDR/pager keywords, 9 new Trove classifiers, and Changelog/CI project URLs.](lucid/mmng-ui@1ed33cef167d55d9375501f0836c91e6f7f5cd54)
+- [Extract serve/version-detection for testability; add 31 new tests across Phases 1–2 (pocsag.py coverage 0% → 64%).](lucid/mmng-ui@9b04b68279877b0c540aaf8f3059632b8c8d5a94)
+
+### other (4 changes)
+
+- [Add root `.gitignore` with entries for `__pycache__`, `.coverage`, `htmlcov/`, `graphify-out/`, `.idea/`, `.opencode/`, and build artifacts.](lucid/mmng-ui@1ed33cef167d55d9375501f0836c91e6f7f5cd54)
+- [Add AGENTS.md for AI agent integration; ignore auto-generated `_version.py` from hatch-vcs.](lucid/mmng-ui@6cc6ac08052ec1b7921a9006b19b1ab0d5b2b17f)
+- [Remove Pipfile (Pipenv) and tox.ini (tox) — Hatch now handles both environments and testing.](lucid/mmng-ui@7d069afb333df7e9529beb6f7edbdc7f5fecceb9)
+- [Add stale bot GitHub Action to auto-close inactive issues and PRs.](lucid/mmng-ui@467158a630d2e602c67d18a7a530fa2ea89afe66)
 
 ## 1.3.1 (2025-10-22)
 
