@@ -356,7 +356,6 @@ FeedWidget {
         spark = self.query_one(f'#spark-{self.port}')
 
         # Inline styles override DEFAULT_CSS for proper grid stretching
-        table.styles.height = '100%'
         spark.styles.height = '100%'
 
         table.add_column('Time', key='time')

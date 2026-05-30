@@ -10,6 +10,7 @@
     border: green;
     column-span: 2;
     background: black;
+    height: 100%;
 }
 
 .feed-log {

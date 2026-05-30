@@ -5,7 +5,7 @@ import pytest
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.message import Message
-from textual.widgets import Digits, Footer, Header, Markdown, TabbedContent, TabPane
+from textual.widgets import DataTable, Digits, Footer, Header, Markdown, TabbedContent, TabPane
 
 from mmng_ui.capcode_db import CapcodeDB
 from mmng_ui.pocsag import (
@@ -743,6 +743,34 @@ async def test_feed_widget_clear():
 
         assert len(list(table.rows)) == 0
         assert len(log.lines) == 0
+
+
+@pytest.mark.asyncio
+async def test_data_table_no_blank_rows():
+    """DataTable should auto-size to row count (no inline height: 100%)."""
+    async with MainScreenTestApp().run_test() as pilot:
+        await pilot.pause()
+        table = pilot.app.screen.query_one('#messages-8888')
+        # No inline height override — table uses default height: auto
+        assert table.styles.height is None or table.styles.height.value == 1.0
+        # With zero rows, no blank filler
+        assert len(list(table.rows)) == 0
+        # Add one row
+        table.add_row('12:00:00', '123456', 'test')
+        await pilot.pause()
+        # Only real rows present
+        assert len(list(table.rows)) == 1
+
+
+@pytest.mark.asyncio
+async def test_messages_container_fills_grid():
+    """.feed-messages is the DataTable itself (no wrapper)."""
+    async with MainScreenTestApp().run_test() as pilot:
+        await pilot.pause()
+        feed = pilot.app.screen.query_one(FeedWidget)
+        elem = feed.query_one('.feed-messages')
+        assert isinstance(elem, DataTable)
+        assert elem.id == 'messages-8888'
 
 
 # --- Multi-port tab tests ---
