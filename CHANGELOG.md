@@ -1,3 +1,14 @@
+## 1.4.0 (2026-05-30)
+
+### added (2 changes)
+
+- [Save tab to file with CSV, Markdown, and JSON export — press `s` to open the save dialog.](lucid/mmng-ui@b7f8e77b6a5fedfe40df5a9b3e33a92ad4d4a410) ([issue #7](lucid/mmng-ui/-/issues/7))
+- [Tab naming via `--port 8888=Name` syntax and runtime rename with the `r` key.](lucid/mmng-ui@b1655ba9ad1b8fbbe1e4eac0f1cd35d45de0e128)
+
+### fixed (1 change)
+
+- [Fix blank rows appearing in the DataTable by fixing height constraints.](lucid/mmng-ui@3dbb8610a569420a5aa6e8aa0c0e613b9787dbc6)
+
 ## 1.3.1 (2025-10-22)
 
 ### fixed (1 change)
