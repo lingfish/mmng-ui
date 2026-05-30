@@ -1,5 +1,16 @@
 # mmng-ui — agent guidance
 
+## Repo
+
+This project is primarily hosted on a private GitLab, and mirrored to GitHub.
+
+Unless otherwise indicated, issues and pull/merge requests will be on GitLab.
+
+## Virtual environment
+
+This project uses `hatch`. Project dependencies will always be in a venv, never at system level. If arbitrary
+code needs to be run, use `hatch run python ...` etc.
+
 ## Build & test
 
 ```shell
@@ -33,6 +44,14 @@ mmng-ui --serve           # web mode (requires textual-serve extra)
 - Quote style: **single quotes** for Python strings
 - Version managed by `hatch-vcs`; tag to release
 - CI via GitLab (`hatch test` across 3.10–3.12), GitHub Actions only has stale.yml
+
+## Changelogs
+
+CHANGELOG.md is usually maintained by GitLab as per https://docs.gitlab.com/user/project/changelogs/
+
+When using agents though, the agent should do updates to the file, following the same syle as the existing file.
+
+Agents should only offer to update the file on new releases/tags, should assess all commits since the previous tag, and offer a list of changes for the user to approve.
 
 ## graphify
 

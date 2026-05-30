@@ -79,3 +79,36 @@ Rule {
     grid-size: 2;
     height: auto;
 }
+
+SaveScreen {
+    align: center middle;
+}
+
+#save-dialog {
+    width: 50%;
+    height: auto;
+    border: thick solid yellow;
+    background: $boost;
+    padding: 1 2;
+}
+
+#save-dialog > Label {
+    margin: 0 0 1 0;
+}
+
+#save-filename {
+    margin: 0 0 1 0;
+}
+
+#save-format {
+    margin: 0 0 1 0;
+}
+
+#save-buttons {
+    align: center middle;
+    height: auto;
+}
+
+#save-buttons > Button {
+    margin: 0 1;
+}

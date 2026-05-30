@@ -1,26 +1,32 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
+import json as json_lib
 import os
 import shlex
 import shutil
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from subprocess import PIPE
 
 import click
 from rich.emoji import EMOJI
 from rich.text import Text
+from rich.text import Text as RichText
 from textual import events, work
 from textual.actions import SkipAction
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Container
+from textual.containers import Center, Container, Horizontal
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
 from textual.widget import Widget
 from textual.widgets import (
+    Button,
     ContentSwitcher,
     DataTable,
     Digits,
@@ -29,6 +35,7 @@ from textual.widgets import (
     Input,
     Label,
     Markdown,
+    RadioSet,
     RichLog,
     Rule,
     Sparkline,
@@ -321,6 +328,122 @@ class RenameTabScreen(ModalScreen):
         self.query_one(Input).focus()
 
 
+def _extract_table_rows(table: DataTable) -> list[dict[str, str]]:
+    """Extract rows from a DataTable as list of dicts with plain text values."""
+    rows = []
+    for row_key in table.rows:
+        raw_time, raw_address, raw_message = table.get_row(row_key)
+        if isinstance(raw_address, RichText):
+            raw_address = raw_address.plain
+        if isinstance(raw_message, RichText):
+            raw_message = raw_message.plain
+        rows.append({
+            'time': str(raw_time),
+            'address': str(raw_address),
+            'message': str(raw_message),
+        })
+    return rows
+
+
+def _format_as_csv(rows: list[dict[str, str]]) -> str:
+    """Format rows as CSV with header row."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Time', 'Address', 'Message'])
+    for row in rows:
+        writer.writerow([row.get('time', ''), row.get('address', ''), row.get('message', '')])
+    return output.getvalue()
+
+
+def _format_as_markdown(rows: list[dict[str, str]]) -> str:
+    """Format rows as a Markdown pipe table."""
+    rows_formatted = [
+        f"| {row.get('time', '')} | {row.get('address', '')} | {row.get('message', '')} |"
+        for row in rows
+    ]
+    return '\n'.join(['| Time | Address | Message |', '| --- | --- | --- |', *rows_formatted]) + '\n'
+
+
+def _format_as_json(rows: list[dict[str, str]]) -> str:
+    """Format rows as a JSON array of objects with capitalized keys."""
+    items = [
+        {
+            'Time': row.get('time', ''),
+            'Address': row.get('address', ''),
+            'Message': row.get('message', ''),
+        }
+        for row in rows
+    ]
+    return json_lib.dumps(items, indent=2)
+
+
+FORMAT_MAP = {
+    'CSV': _format_as_csv,
+    'Markdown': _format_as_markdown,
+    'JSON': _format_as_json,
+}
+
+
+class SaveScreen(ModalScreen):
+    """Modal screen for saving the current tab's messages to a file."""
+
+    BINDINGS = [('escape', 'cancel', 'Cancel')]
+
+    def __init__(self, rows: list[dict[str, str]], port: int) -> None:
+        super().__init__()
+        self.rows = rows
+        self.port = port
+        self.selected_format = 'CSV'
+
+    def compose(self) -> ComposeResult:
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        default_filename = f'mmng_port{self.port}_{timestamp}.csv'
+        with Container(id='save-dialog'):
+            yield Label('Save messages to file:')
+            yield Input(value=default_filename, placeholder='Enter filename', id='save-filename')
+            yield Label('Format:')
+            yield RadioSet('CSV', 'Markdown', 'JSON', id='save-format')
+            with Horizontal(id='save-buttons'):
+                yield Button('Save', variant='primary', id='save-submit')
+                yield Button('Cancel', id='save-cancel')
+
+    def on_mount(self) -> None:
+        radio_set = self.query_one('#save-format', RadioSet)
+        buttons = radio_set.query('RadioButton')
+        if buttons:
+            buttons.first().value = True
+
+    def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
+        self.selected_format = str(event.pressed.label)
+        filename_input = self.query_one('#save-filename', Input)
+        current = filename_input.value.strip()
+        base = current.rsplit('.', 1)[0] if '.' in current else current
+        ext = {'CSV': 'csv', 'Markdown': 'md', 'JSON': 'json'}[self.selected_format]
+        filename_input.value = f'{base}.{ext}'
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == 'save-submit':
+            self._do_save()
+        elif event.button.id == 'save-cancel':
+            self.app.pop_screen()
+
+    def on_input_submitted(self, _event: Input.Submitted) -> None:
+        self._do_save()
+
+    def _do_save(self) -> None:
+        filename_input = self.query_one('#save-filename', Input)
+        filename = filename_input.value.strip() or f'mmng_port{self.port}.csv'
+        formatter = FORMAT_MAP.get(self.selected_format, _format_as_csv)
+        content = formatter(self.rows)
+        string_io = io.StringIO(content)
+        self.app.deliver_text(string_io, save_filename=filename)
+        self.app.notify(f'Saved as {filename}', title='Export')
+        self.app.pop_screen()
+
+    def action_cancel(self) -> None:
+        self.app.pop_screen()
+
+
 class FeedWidget(Widget):
     """A widget representing a single POCSAG feed on one UDP port."""
 
@@ -563,6 +686,7 @@ class Pocsag(App):
             key_display='a',
         ),
         Binding(key='r', action='rename_tab', description='Rename tab'),
+        Binding(key='s', action='save_as', description='Save tab to file'),
     ]
 
     def on_mount(self):
@@ -582,6 +706,14 @@ class Pocsag(App):
             self._rename_pane = pane
             title = str(pane._title) if pane._title else ''
             self.push_screen(RenameTabScreen(current_title=title))
+
+    def action_save_as(self) -> None:
+        tabs = self.screen.query_one(FeedTabbedContent)
+        if (pane := tabs.active_pane) is not None:
+            table = pane.query_one(DataTable)
+            rows = _extract_table_rows(table)
+            port = pane.query_one(FeedWidget).port
+            self.push_screen(SaveScreen(rows=rows, port=port))
 
 
 def _serve_mode(host: str | None, port: int) -> None:

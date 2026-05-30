@@ -5,7 +5,7 @@ import pytest
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.message import Message
-from textual.widgets import DataTable, Digits, Footer, Header, Markdown, TabbedContent, TabPane
+from textual.widgets import DataTable, Digits, Footer, Header, Input, Markdown, RadioButton, RadioSet, TabbedContent, TabPane
 
 from mmng_ui.capcode_db import CapcodeDB
 from mmng_ui.pocsag import (
@@ -19,8 +19,13 @@ from mmng_ui.pocsag import (
     OutputMessage,
     PortConfig,
     RenameTabScreen,
+    SaveScreen,
     Status,
     StatusWidget,
+    _extract_table_rows,
+    _format_as_csv,
+    _format_as_json,
+    _format_as_markdown,
     _serve_mode,
     parse_ports,
 )
@@ -974,3 +979,333 @@ async def test_rename_tab_escape_cancels():
         tabs = pilot.app.screen.query_one(TabbedContent)
         tab = tabs.get_tab('tab-8888')
         assert 'OriginalName' in str(tab.label)
+
+
+# --- SaveScreen and format tests ---
+
+SAMPLE_ROWS = [
+    {'time': '14:30:25', 'address': '1622020', 'message': 'Test message 1'},
+    {'time': '14:30:26', 'address': '1234567', 'message': 'Another message with, comma'},
+]
+
+EXPECTED_CSV = (
+    'Time,Address,Message\r\n'
+    '14:30:25,1622020,Test message 1\r\n'
+    '14:30:26,1234567,"Another message with, comma"\r\n'
+)
+
+EXPECTED_CSV_NO_CR = (
+    'Time,Address,Message\n'
+    '14:30:25,1622020,Test message 1\n'
+    '14:30:26,1234567,"Another message with, comma"\n'
+)
+
+EXPECTED_MD = (
+    '| Time | Address | Message |\n'
+    '| --- | --- | --- |\n'
+    '| 14:30:25 | 1622020 | Test message 1 |\n'
+    '| 14:30:26 | 1234567 | Another message with, comma |\n'
+)
+
+EXPECTED_JSON = (
+    '[\n'
+    '  {\n'
+    '    "Time": "14:30:25",\n'
+    '    "Address": "1622020",\n'
+    '    "Message": "Test message 1"\n'
+    '  },\n'
+    '  {\n'
+    '    "Time": "14:30:26",\n'
+    '    "Address": "1234567",\n'
+    '    "Message": "Another message with, comma"\n'
+    '  }\n'
+    ']'
+)
+
+EXPECTED_JSON_EMPTY = '[]'
+
+EXPECTED_CSV_HEADER_ONLY = 'Time,Address,Message\r\n'
+
+
+def test_format_as_csv():
+    """Test CSV formatting with multiple rows."""
+    result = _format_as_csv(SAMPLE_ROWS)
+    assert result == EXPECTED_CSV or result == EXPECTED_CSV_NO_CR
+
+
+def test_format_as_csv_empty():
+    """Test CSV formatting with empty rows."""
+    result = _format_as_csv([])
+    assert result == EXPECTED_CSV_HEADER_ONLY or result == 'Time,Address,Message\n'
+
+
+def test_format_as_markdown():
+    """Test Markdown table formatting."""
+    result = _format_as_markdown(SAMPLE_ROWS)
+    assert result == EXPECTED_MD
+
+
+def test_format_as_markdown_empty():
+    """Test Markdown formatting with empty rows returns header + separator."""
+    result = _format_as_markdown([])
+    assert result == EXPECTED_MD.splitlines()[0] + '\n' + EXPECTED_MD.splitlines()[1] + '\n'
+
+
+def test_format_as_json():
+    """Test JSON formatting with multiple rows."""
+    result = _format_as_json(SAMPLE_ROWS)
+    assert result == EXPECTED_JSON
+
+
+def test_format_as_json_empty():
+    """Test JSON formatting with empty rows."""
+    result = _format_as_json([])
+    assert result == EXPECTED_JSON_EMPTY
+
+
+def test_format_as_json_single_row():
+    """Test JSON formatting with a single row."""
+    single_row = [{'time': '12:00:00', 'address': '9999999', 'message': 'Single'}]
+    result = _format_as_json(single_row)
+    assert '"12:00:00"' in result
+    assert '"9999999"' in result
+    assert '"Single"' in result
+
+
+# DataTable extraction tests
+class ExtractionTestApp(App):
+    def compose(self) -> ComposeResult:
+        table = DataTable(id='test-table')
+        table.add_column('Time', key='time')
+        table.add_column('Address', key='address')
+        table.add_column('Message', key='message')
+        table.add_row('14:30:25', '1622020', Text('Test message 1', overflow='fold'))
+        table.add_row(
+            '14:30:26',
+            Text('Alias (1234567)', justify='right'),
+            'Another message',
+        )
+        yield table
+
+
+@pytest.mark.asyncio
+async def test_extract_table_rows():
+    """Test extracting rows from a DataTable."""
+    async with ExtractionTestApp().run_test() as pilot:
+        await pilot.pause()
+        table = pilot.app.screen.query_one('#test-table')
+        rows = _extract_table_rows(table)
+        assert len(rows) == 2
+        assert rows[0]['time'] == '14:30:25'
+        assert rows[0]['address'] == '1622020'
+        assert rows[0]['message'] == 'Test message 1'
+        assert rows[1]['time'] == '14:30:26'
+        assert rows[1]['address'] == 'Alias (1234567)'
+        assert rows[1]['message'] == 'Another message'
+
+
+@pytest.mark.asyncio
+async def test_extract_table_rows_empty():
+    """Test extracting rows from an empty DataTable."""
+    async with ExtractionTestApp().run_test() as pilot:
+        await pilot.pause()
+        empty_table = DataTable(id='empty-table')
+        empty_table.add_column('Time', key='time')
+        empty_table.add_column('Address', key='address')
+        empty_table.add_column('Message', key='message')
+        pilot.app.screen.mount(empty_table)
+        await pilot.pause()
+        rows = _extract_table_rows(empty_table)
+        assert rows == []
+
+
+class SaveScreenTestApp(App):
+    """Minimal app for testing SaveScreen."""
+
+    def __init__(self):
+        super().__init__()
+        self.delivered = None
+        self.delivered_filename = None
+
+    def deliver_text(self, path_or_file, *, save_filename=None, **_kwargs):
+        content = path_or_file.read() if hasattr(path_or_file, 'read') else str(path_or_file)
+        self.delivered = content
+        self.delivered_filename = save_filename
+        return 'test-key'
+
+
+@pytest.mark.asyncio
+async def test_save_screen_compose():
+    """Test SaveScreen composes correctly."""
+    async with SaveScreenTestApp().run_test() as pilot:
+        screen = SaveScreen(rows=SAMPLE_ROWS, port=8888)
+        pilot.app.push_screen(screen)
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, SaveScreen)
+        assert screen.rows == SAMPLE_ROWS
+        assert screen.port == 8888
+
+
+@pytest.mark.asyncio
+async def test_save_screen_escape_cancels():
+    """Test Escape dismisses SaveScreen without saving."""
+    async with SaveScreenTestApp().run_test() as pilot:
+        pilot.app.push_screen(SaveScreen(rows=SAMPLE_ROWS, port=8888))
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, SaveScreen)
+        await pilot.press('escape')
+        await pilot.pause()
+        assert not isinstance(pilot.app.screen, SaveScreen)
+        assert pilot.app.delivered is None
+
+
+@pytest.mark.asyncio
+async def test_save_screen_enter_saves_csv():
+    """Test Enter submits and calls deliver_text with CSV content."""
+    async with SaveScreenTestApp().run_test() as pilot:
+        pilot.app.push_screen(SaveScreen(rows=SAMPLE_ROWS, port=8888))
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        assert not isinstance(pilot.app.screen, SaveScreen)
+        assert pilot.app.delivered is not None
+        assert 'Time,Address,Message' in pilot.app.delivered
+        assert '14:30:25' in pilot.app.delivered
+        assert pilot.app.delivered_filename is not None
+        assert pilot.app.delivered_filename.startswith('mmng_port8888_')
+
+
+# Integration test with full app pipeline
+class SaveActionTestApp(App):
+    """Test app with save_as action and binding."""
+
+    CSS_PATH = None
+    BINDINGS = [
+        ('s', 'save_as', 'Save tab to file'),
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
+        self.mmng_binary = 'multimon-ng'
+        self.sox_binary = None
+        self.sox_rate = None
+        self.charset = 'US'
+        self.port_configs = [PortConfig(8888)]
+        self.message_count = []
+        self.json_capable = True
+        self.mmng.version = '1.4.0'
+        self._streaming_disabled = True
+        self.capcode_db = None
+        self.delivered = None
+        self.delivered_filename = None
+
+    def action_save_as(self):
+        tabs = self.screen.query_one(FeedTabbedContent)
+        if (pane := tabs.active_pane) is not None:
+            table = pane.query_one(DataTable)
+            rows = _extract_table_rows(table)
+            port = pane.query_one(FeedWidget).port
+            self.push_screen(SaveScreen(rows=rows, port=port))
+
+    def deliver_text(self, path_or_file, *, save_filename=None, **_kwargs):
+        content = path_or_file.read() if hasattr(path_or_file, 'read') else str(path_or_file)
+        self.delivered = content
+        self.delivered_filename = save_filename
+        return 'test-key'
+
+    def on_mount(self):
+        self.push_screen(MainScreen())
+
+
+@pytest.mark.asyncio
+async def test_save_action_opens_save_screen():
+    """Test pressing 's' opens the SaveScreen."""
+    async with SaveActionTestApp().run_test() as pilot:
+        await pilot.pause()
+        assert not isinstance(pilot.app.screen, SaveScreen)
+        await pilot.press('s')
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, SaveScreen)
+
+
+@pytest.mark.asyncio
+async def test_save_action_with_data():
+    """Test saving with data in the table delivers formatted CSV."""
+    async with SaveActionTestApp().run_test() as pilot:
+        await pilot.pause()
+        table = pilot.app.screen.query_one('#messages-8888')
+        table.add_row(
+            '14:30:25',
+            '1622020',
+            Text('Test message 1', overflow='fold'),
+        )
+        await pilot.pause()
+        await pilot.press('s')
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, SaveScreen)
+        await pilot.press('enter')
+        await pilot.pause()
+        assert not isinstance(pilot.app.screen, SaveScreen)
+        assert pilot.app.delivered is not None
+        assert 'Time,Address,Message' in pilot.app.delivered
+        assert '14:30:25' in pilot.app.delivered
+        assert '1622020' in pilot.app.delivered
+        assert 'Test message 1' in pilot.app.delivered
+
+
+# --- SaveScreen fix tests: RadioSet default selection, extension update, notification ---
+
+
+@pytest.mark.asyncio
+async def test_save_screen_radio_set_selects_first_on_mount():
+    """Test that RadioSet selects first option (CSV) on mount."""
+    async with SaveScreenTestApp().run_test() as pilot:
+        pilot.app.push_screen(SaveScreen(rows=SAMPLE_ROWS, port=8888))
+        await pilot.pause()
+        radio_set = pilot.app.screen.query_one('#save-format', RadioSet)
+        assert radio_set.pressed_index == 0
+
+
+@pytest.mark.asyncio
+async def test_save_screen_format_change_updates_extension():
+    """Test that changing RadioSet updates filename extension."""
+    async with SaveScreenTestApp().run_test() as pilot:
+        pilot.app.push_screen(SaveScreen(rows=SAMPLE_ROWS, port=8888))
+        await pilot.pause()
+        filename_input = pilot.app.screen.query_one('#save-filename', Input)
+        radio_buttons = pilot.app.screen.query(RadioButton)
+
+        # Default should be .csv
+        assert filename_input.value.endswith('.csv')
+
+        # Change to Markdown (index 1)
+        await pilot.click(radio_buttons[1])
+        await pilot.pause()
+        assert filename_input.value.endswith('.md')
+
+        # Change to JSON (index 2)
+        await pilot.click(radio_buttons[2])
+        await pilot.pause()
+        assert filename_input.value.endswith('.json')
+
+
+@pytest.mark.asyncio
+async def test_save_screen_notifies_after_save():
+    """Test that _do_save calls app.notify with expected message."""
+    notify_messages = []
+
+    class NotifySaveTestApp(SaveScreenTestApp):
+        def notify(self, message, title=None, **kwargs):
+            notify_messages.append((message, title))
+
+    async with NotifySaveTestApp().run_test() as pilot:
+        pilot.app.push_screen(SaveScreen(rows=SAMPLE_ROWS, port=8888))
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        assert len(notify_messages) == 1
+        msg, title = notify_messages[0]
+        assert title == 'Export'
+        assert msg.startswith('Saved as')
+        assert 'mmng_port8888_' in msg
