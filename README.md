@@ -19,6 +19,9 @@ You can also use it within a web browser!
   * [How to use it](#how-to-use-it)
     * [JSON detection](#json-detection)
     * [sox conversion mode](#sox-conversion-mode)
+    * [Multiple ports and tabs](#multiple-ports-and-tabs)
+    * [Capcode database](#capcode-database)
+    * [Save tab to file](#save-tab-to-file)
   * [Example screenshot](#example-screenshot)
   * [Supported Python versions](#supported-python-versions)
 <!-- TOC -->
@@ -71,7 +74,7 @@ See `mmng-ui --help` for CLI options.
 
 Run `mmng-ui`, and you'll be greeted with this screen:
 
-![screenshot](https://raw.githubusercontent.com/lingfish/mmng-ui/refs/heads/main/docs/initial%20screen.png)
+![screenshot](/docs/initial%20screen.png)
 
 Notice in the status pane, it says "Receiver: idle" -- it is now listening for UDP packets sent to the default port
 of 8888.
@@ -113,11 +116,62 @@ With release 1.3.0, you can use the `--sox-rate` (optionally with `--sox-binary`
 an instance of `sox` in the decoding pipeline, before `multimon-ng`. You can use the same format as `sox` accepts,
 for example, `48k`, or `32000`.
 
+### Multiple ports and tabs
+
+You can listen on multiple UDP ports simultaneously by passing `--port` (or `-p`) more than once:
+
+```shell
+mmng-ui --port 8888 --port 8889 --port 8890
+```
+
+Each port gets its own tab with an independent status pane, sparkline, and message log.  At launch you can name a tab
+using `--port <port>=<name>` or `--port <port>:<name>`:
+
+```shell
+mmng-ui --port 8888=Primary --port 8889=Secondary
+```
+
+You can also rename the active tab at any time by pressing `r`.
+
+### Capcode database
+
+Pass a JSON or CSV file of known capcodes with `--capcodes` (or `-k`):
+
+```shell
+mmng-ui --capcodes /path/to/capcodes.json
+```
+
+The file format is an array of objects with `address`, `label`, and optional `icon` and `colour` fields:
+
+```json
+[
+  { "address": "1234567", "label": "Fire Dept",     "icon": "fire",     "colour": "red" },
+  { "address": "7654321", "label": "Ambulance",      "icon": "ambulance" },
+  { "address": "1111111", "label": "Local Council" }
+]
+```
+
+When a message's capcode matches a known entry, its alias is shown in the configured colour with an optional emoji
+prefix.  Unmatched capcodes display the raw address as before.
+
+CSV format is also supported:
+
+```csv
+address,label,icon,colour
+1234567,Fire Dept,fire,red
+7654321,Ambulance,ambulance,
+```
+
+### Save tab to file
+
+Press `s` while the app is running to open the save dialog.  You can choose a filename and export format -- CSV,
+Markdown, or JSON -- to save all messages from the active tab.
+
 ## Example screenshot
 
 Here's what a screen full of decodes might look like:
 
-![screenshot](https://raw.githubusercontent.com/lingfish/mmng-ui/refs/heads/main/docs/working%20screen.png)
+![screenshot](/docs/working%20screen.png)
 
 ## Supported Python versions
 
