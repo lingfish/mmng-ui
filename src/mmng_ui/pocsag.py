@@ -26,6 +26,7 @@ from textual.widgets import (
     Digits,
     Footer,
     Header,
+    Input,
     Label,
     Markdown,
     RichLog,
@@ -40,20 +41,42 @@ from mmng_ui.capcode_db import CapcodeDB
 from mmng_ui.reader import ParseLine
 
 
-def parse_ports(port_str: str) -> list[int]:
-    """Parse a comma-separated port string into a list of integers."""
+def parse_ports(port_str: str) -> list[PortConfig]:
+    """Parse a comma-separated port string into PortConfig objects.
+
+    Supports port=Name or port:Name syntax for custom tab names.
+    """
     if not port_str:
         raise ValueError('Port string cannot be empty')
-    ports = []
+    configs = []
     for part in port_str.split(','):
         stripped = part.strip()
         if not stripped:
             raise ValueError(f'Invalid port string: {port_str!r}')
-        try:
-            ports.append(int(stripped))
-        except ValueError:
-            raise ValueError(f'Invalid port value: {stripped!r}')
-    return ports
+        if '=' in stripped:
+            port_part, name_part = stripped.split('=', 1)
+            name = name_part.strip()
+            if not name:
+                raise ValueError(f'Empty tab name in port string: {stripped!r}')
+            try:
+                configs.append(PortConfig(port=int(port_part.strip()), name=name))
+            except ValueError:
+                raise ValueError(f'Invalid port value: {port_part.strip()!r}')
+        elif ':' in stripped:
+            port_part, name_part = stripped.split(':', 1)
+            name = name_part.strip()
+            if not name:
+                raise ValueError(f'Empty tab name in port string: {stripped!r}')
+            try:
+                configs.append(PortConfig(port=int(port_part.strip()), name=name))
+            except ValueError:
+                raise ValueError(f'Invalid port value: {port_part.strip()!r}')
+        else:
+            try:
+                configs.append(PortConfig(port=int(stripped)))
+            except ValueError:
+                raise ValueError(f'Invalid port value: {stripped!r}')
+    return configs
 
 
 @dataclass
@@ -75,6 +98,7 @@ class Status:
     def __repr__(self):
         return f'Receiver: {self.receiver}\nIP address: {self.ip_address}'
 
+
 @dataclass
 class Executable:
     """An info class for the executables to run."""
@@ -82,6 +106,14 @@ class Executable:
     command: str
     resolved_path: str
     version: str | None
+
+
+@dataclass
+class PortConfig:
+    """A port with an optional custom tab name."""
+
+    port: int
+    name: str | None = None
 
 
 class UDPHandler(asyncio.DatagramProtocol):
@@ -186,23 +218,23 @@ class AboutScreen(ModalScreen):
     BINDINGS = [('escape,space,q', 'app.pop_screen', 'Close')]
 
     def compose(self) -> ComposeResult:
-        mmng_info = f'''
+        mmng_info = f"""
 ## multimon-ng
 
 ```
 Path: {self.app.mmng.resolved_path}
 Version: {self.app.mmng.version}
 ```
-        '''
+        """
         if self.app.sox_rate:
-            sox_info = f'''
+            sox_info = f"""
 ## sox
 
 ```
 Path: {self.app.sox.resolved_path}
 Version: {self.app.sox.version}
 ```
-        '''
+        """
         with Container(id='about'):
             yield Markdown('# This is mmng-ui!')
             with Center():
@@ -214,8 +246,6 @@ Version: {self.app.sox.version}
                 yield Markdown(mmng_info)
                 if self.app.sox_rate:
                     yield Markdown(sox_info)
-
-
 
 
 class MsgsPerSecond(Sparkline):
@@ -259,6 +289,36 @@ class FeedTabPane(TabPane):
         height: 100%;
     }
     """
+
+
+class RenameTabScreen(ModalScreen):
+    """Modal screen for renaming the active tab."""
+
+    BINDINGS = [('escape', 'cancel', 'Cancel')]
+
+    def __init__(self, current_title: str) -> None:
+        super().__init__()
+        self.current_title = current_title
+
+    def compose(self) -> ComposeResult:
+        with Container():
+            yield Label('Rename tab:')
+            yield Input(value=self.current_title, placeholder='Enter new tab name')
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        name = event.value.strip()
+        if name:
+            pane = self.app._rename_pane
+            pane._title = name
+            tab = pane.parent.parent.get_tab(pane.id)
+            tab.label = name
+        self.app.pop_screen()
+
+    def action_cancel(self) -> None:
+        self.app.pop_screen()
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
 
 
 class FeedWidget(Widget):
@@ -319,8 +379,7 @@ FeedWidget {
         time_w = table.columns['time'].get_render_width(table)
         addr_w = table.columns['address'].get_render_width(table)
         scroll_pad = table.styles.scrollbar_size_vertical if table.show_vertical_scrollbar else 0
-        available = (table.size.width - time_w - addr_w
-                     - (2 * table.cell_padding) - scroll_pad)
+        available = table.size.width - time_w - addr_w - (2 * table.cell_padding) - scroll_pad
         table.columns['message'].width = max(available, 20)
 
     def start_streaming(self):
@@ -362,7 +421,9 @@ FeedWidget {
         # Stream stdout asynchronously
         async for line in self.read_process_output(self.process.stdout):
             self.post_message(OutputMessage(line))
-            self.set_timer(1, lambda: setattr(self.query_one(f'#status-{self.port}'), 'receiver', '[dark_green]waiting[/]'))
+            self.set_timer(
+                1, lambda: setattr(self.query_one(f'#status-{self.port}'), 'receiver', '[dark_green]waiting[/]')
+            )
             self.query_one(f'#spark-{self.port}').data = self.query_one(f'#spark-{self.port}').data[-9:] + [len(line)]
             self.message_count.append(1)
 
@@ -428,9 +489,10 @@ class MainScreen(Screen):
     def compose(self):
         yield Header()
         with FeedTabbedContent():
-            for port in self.app.ports:
-                with FeedTabPane(f'Port {port}', id=f'tab-{port}'):
-                    yield FeedWidget(port=port, capcode_db=self.app.capcode_db)
+            for cfg in self.app.port_configs:
+                title = cfg.name or f'Port {cfg.port}'
+                with FeedTabPane(title, id=f'tab-{cfg.port}'):
+                    yield FeedWidget(port=cfg.port, capcode_db=self.app.capcode_db)
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -457,10 +519,18 @@ class MainScreen(Screen):
 
 
 class Pocsag(App):
-    def __init__(self, mmng_binary: str, ports: list[int], charset: str, sox_binary: str | None, sox_rate: int | None, capcode_db: CapcodeDB | None = None) -> None:
+    def __init__(
+        self,
+        mmng_binary: str,
+        port_configs: list[PortConfig],
+        charset: str,
+        sox_binary: str | None,
+        sox_rate: int | None,
+        capcode_db: CapcodeDB | None = None,
+    ) -> None:
         self.mmng_binary = mmng_binary
         self.sox_binary = sox_binary
-        self.ports = ports
+        self.port_configs = port_configs
         self.charset = charset
         self.sox_rate = sox_rate
         self.capcode_db = capcode_db
@@ -469,6 +539,10 @@ class Pocsag(App):
             self.sox = Executable(command=sox_binary, resolved_path=shutil.which(sox_binary) or None, version=None)
         self.json_capable = False
         super().__init__()
+
+    @property
+    def ports(self) -> list[int]:
+        return [pc.port for pc in self.port_configs]
 
     CSS_PATH = 'pocsag.tcss'
 
@@ -489,6 +563,7 @@ class Pocsag(App):
             description='About/info',
             key_display='a',
         ),
+        Binding(key='r', action='rename_tab', description='Rename tab'),
     ]
 
     def on_mount(self):
@@ -502,6 +577,13 @@ class Pocsag(App):
     def action_about(self) -> None:
         self.push_screen(AboutScreen())
 
+    def action_rename_tab(self) -> None:
+        tabs = self.screen.query_one(FeedTabbedContent)
+        if (pane := tabs.active_pane) is not None:
+            self._rename_pane = pane
+            title = str(pane._title) if pane._title else ''
+            self.push_screen(RenameTabScreen(current_title=title))
+
 
 def _serve_mode(host: str | None, port: int) -> None:
     """Handle serve mode logic."""
@@ -509,6 +591,7 @@ def _serve_mode(host: str | None, port: int) -> None:
         import socket
 
         from textual_serve.server import Server
+
         if host == 'localhost':
             public_url = f'http://localhost:{port}'
         else:
@@ -516,15 +599,29 @@ def _serve_mode(host: str | None, port: int) -> None:
         server = Server(command='mmng-ui', host=host, port=port, public_url=public_url)
         server.serve()
     except ImportError:
-        click.echo('Error: textual-serve is not installed.  Please install mmng-ui via "pipx install mmng-ui[web]"', err=True)
+        click.echo(
+            'Error: textual-serve is not installed.  Please install mmng-ui via "pipx install mmng-ui[web]"', err=True
+        )
         sys.exit(1)
 
 
 @click.command(context_settings={'show_default': True})
 @click.option('--mmng-binary', '-m', required=False, default='multimon-ng', help='Path to multimon-ng binary')
-@click.option('--sox-binary', '-s', required=False, default='sox', help='Path to sox binary (this does not imply that sox will run')
+@click.option(
+    '--sox-binary',
+    '-s',
+    required=False,
+    default='sox',
+    help='Path to sox binary (this does not imply that sox will run',
+)
 @click.option('--sox-rate', '-r', required=False, type=str, help='Input samplerate for sox to convert from')
-@click.option('--port', '-p', required=False, default='8888', help='Port(s) to listen on (comma-separated)')
+@click.option(
+    '--port',
+    '-p',
+    required=False,
+    default='8888',
+    help='Port(s) to listen on (comma-separated); append =Name or :Name for custom tab name',
+)
 @click.option(
     '--charset',
     '-c',
@@ -558,9 +655,16 @@ def main(mmng_binary, sox_binary, sox_rate, port, charset, capcodes, serve, serv
                 click.echo(f'sox binary not found!  I searched for "{sox_binary}"', err=True)
                 sys.exit(1)
 
-        ports = parse_ports(port)
+        port_configs = parse_ports(port)
         capcode_db = CapcodeDB.load(capcodes) if capcodes else None
-        Pocsag(mmng_binary=mmng_binary, sox_binary=sox_binary, sox_rate=sox_rate, ports=ports, charset=charset, capcode_db=capcode_db).run()
+        Pocsag(
+            mmng_binary=mmng_binary,
+            sox_binary=sox_binary,
+            sox_rate=sox_rate,
+            port_configs=port_configs,
+            charset=charset,
+            capcode_db=capcode_db,
+        ).run()
 
 
 if __name__ == '__main__':

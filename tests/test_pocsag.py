@@ -17,6 +17,8 @@ from mmng_ui.pocsag import (
     MainScreen,
     MsgsPerSecond,
     OutputMessage,
+    PortConfig,
+    RenameTabScreen,
     Status,
     StatusWidget,
     _serve_mode,
@@ -31,49 +33,36 @@ class StatusApp(App):
 
 def test_output_message():
     """Test OutputMessage dataclass."""
-    msg = OutputMessage("test output")
+    msg = OutputMessage('test output')
     assert isinstance(msg, Message)
-    assert msg.output == "test output"
+    assert msg.output == 'test output'
 
 
 def test_status_dataclass():
     """Test Status dataclass."""
-    status = Status(
-        receiver="test_receiver",
-        ip_address="192.168.1.1",
-        json_mode=True,
-        charset="US"
-    )
-    assert status.receiver == "test_receiver"
-    assert status.ip_address == "192.168.1.1"
+    status = Status(receiver='test_receiver', ip_address='192.168.1.1', json_mode=True, charset='US')
+    assert status.receiver == 'test_receiver'
+    assert status.ip_address == '192.168.1.1'
     assert status.json_mode is True
-    assert status.charset == "US"
+    assert status.charset == 'US'
 
     # Test __repr__
     repr_str = repr(status)
-    assert "Receiver: test_receiver" in repr_str
-    assert "IP address: 192.168.1.1" in repr_str
+    assert 'Receiver: test_receiver' in repr_str
+    assert 'IP address: 192.168.1.1' in repr_str
 
 
 def test_executable_dataclass():
     """Test Executable dataclass."""
     # Test with resolved_path
-    exec_with_path = Executable(
-        command="test_cmd",
-        resolved_path="/usr/bin/test_cmd",
-        version="1.0.0"
-    )
-    assert exec_with_path.command == "test_cmd"
-    assert exec_with_path.resolved_path == "/usr/bin/test_cmd"
-    assert exec_with_path.version == "1.0.0"
+    exec_with_path = Executable(command='test_cmd', resolved_path='/usr/bin/test_cmd', version='1.0.0')
+    assert exec_with_path.command == 'test_cmd'
+    assert exec_with_path.resolved_path == '/usr/bin/test_cmd'
+    assert exec_with_path.version == '1.0.0'
 
     # Test with None resolved_path
-    exec_none_path = Executable(
-        command="test_cmd",
-        resolved_path=None,
-        version=None
-    )
-    assert exec_none_path.command == "test_cmd"
+    exec_none_path = Executable(command='test_cmd', resolved_path=None, version=None)
+    assert exec_none_path.command == 'test_cmd'
     assert exec_none_path.resolved_path is None
     assert exec_none_path.version is None
 
@@ -225,14 +214,17 @@ async def test_about_screen_dismiss_q():
 
 # MainScreen compose and on_mount tests
 class MainScreenTestApp(App):
-    def __init__(self, ports=None, capcode_db=None):
+    def __init__(self, ports=None, port_configs=None, capcode_db=None):
         super().__init__()
         self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
         self.mmng_binary = 'multimon-ng'
         self.sox_binary = None
         self.sox_rate = None
         self.charset = 'US'
-        self.ports = ports or [8888]
+        if port_configs is not None:
+            self.port_configs = port_configs
+        else:
+            self.port_configs = [PortConfig(p) for p in (ports or [8888])]
         self.message_count = []
         self.json_capable = True
         self.mmng.version = '1.4.0'
@@ -287,9 +279,7 @@ async def test_main_screen_on_output_message_adds_row():
     """Test FeedWidget adds row to DataTable for valid message."""
     async with MainScreenTestApp().run_test() as pilot:
         await pilot.pause()
-        test_line = (
-            '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
-        )
+        test_line = '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
         feed = pilot.app.screen.query_one(FeedWidget)
         feed.post_message(OutputMessage(test_line))
         await pilot.pause()
@@ -322,9 +312,7 @@ async def test_on_output_message_shows_capcode_alias(tmp_path):
     capcode_db = CapcodeDB.load(json_file)
     async with MainScreenTestApp(capcode_db=capcode_db).run_test() as pilot:
         await pilot.pause()
-        test_line = (
-            '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
-        )
+        test_line = '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
         feed = pilot.app.screen.query_one(FeedWidget)
         feed.post_message(OutputMessage(test_line))
         await pilot.pause()
@@ -345,9 +333,7 @@ async def test_on_output_message_unknown_capcode_shows_raw(tmp_path):
     capcode_db = CapcodeDB.load(json_file)
     async with MainScreenTestApp(capcode_db=capcode_db).run_test() as pilot:
         await pilot.pause()
-        test_line = (
-            '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
-        )
+        test_line = '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
         feed = pilot.app.screen.query_one(FeedWidget)
         feed.post_message(OutputMessage(test_line))
         await pilot.pause()
@@ -362,23 +348,28 @@ async def test_on_output_message_unknown_capcode_shows_raw(tmp_path):
 # Pocsag action and key binding tests
 class ActionTestApp(App):
     """A minimal App with Pocsag bindings/actions and a MainScreen."""
+
     CSS_PATH = None
     BINDINGS = [
         ('c', 'clear_screen', 'Clear'),
         ('question_mark', "app.push_screen('help')", 'Help'),
         ('a', 'about', 'About'),
         ('q', 'quit', 'Quit'),
+        ('r', 'rename_tab', 'Rename tab'),
     ]
     SCREENS = {'help': HelpScreen, 'about': AboutScreen}
 
-    def __init__(self, ports=None):
+    def __init__(self, ports=None, port_configs=None):
         super().__init__()
         self.mmng = Executable('multimon-ng', '/usr/bin/multimon-ng', '1.4.0')
         self.mmng_binary = 'multimon-ng'
         self.sox_binary = None
         self.sox_rate = None
         self.charset = 'US'
-        self.ports = ports or [8888]
+        if port_configs is not None:
+            self.port_configs = port_configs
+        else:
+            self.port_configs = [PortConfig(p) for p in (ports or [8888])]
         self.message_count = []
         self.json_capable = True
         self.mmng.version = '1.4.0'
@@ -392,6 +383,13 @@ class ActionTestApp(App):
 
     def action_about(self):
         self.push_screen('about')
+
+    def action_rename_tab(self):
+        tabs = self.screen.query_one(FeedTabbedContent)
+        if (pane := tabs.active_pane) is not None:
+            self._rename_pane = pane
+            title = str(pane._title) if pane._title else ''
+            self.push_screen(RenameTabScreen(current_title=title))
 
     def on_mount(self) -> None:
         self.push_screen(MainScreen())
@@ -541,9 +539,7 @@ async def test_on_output_message_scrolls_to_bottom():
     """Test FeedWidget scrolls to bottom after adding a row."""
     async with MainScreenTestApp().run_test() as pilot:
         await pilot.pause()
-        test_line = (
-            '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
-        )
+        test_line = '2024-09-23 12:38:00: POCSAG512: Address:  162202  Function: 0  Alpha:   test message'
         feed = pilot.app.screen.query_one(FeedWidget)
         feed.post_message(OutputMessage(test_line))
         await pilot.pause()
@@ -560,6 +556,7 @@ def test_serve_mode_starts_server(monkeypatch):
     class MockServer:
         def __init__(self, command, host, port, public_url):
             server_args.update(command=command, host=host, port=port, public_url=public_url)
+
         def serve(self):
             server_args['served'] = True
 
@@ -585,16 +582,19 @@ def test_serve_mode_starts_server(monkeypatch):
 
 def test_serve_mode_missing_dependency_exits(monkeypatch):
     """Test _serve_mode exits when textual-serve is missing."""
+
     def mock_import(name, *args, **kwargs):
         if name == 'textual_serve':
             raise ImportError("No module named 'textual_serve'")
         return importlib.__import__(name, *args, **kwargs)
 
     echo_messages = []
+
     def mock_echo(message, err=False):
         echo_messages.append(message)
 
     exit_code = []
+
     def mock_exit(code):
         exit_code.append(code)
 
@@ -611,19 +611,60 @@ def test_serve_mode_missing_dependency_exits(monkeypatch):
 
 # --- parse_ports tests ---
 
+
 def test_parse_ports_single():
     """Test parse_ports with a single port."""
-    assert parse_ports('8888') == [8888]
+    assert parse_ports('8888') == [PortConfig(8888)]
+
+
+def test_parse_ports_single_with_equals():
+    """Test parse_ports with a single port and equals syntax."""
+    assert parse_ports('8888=Cops') == [PortConfig(8888, 'Cops')]
+
+
+def test_parse_ports_single_with_colon():
+    """Test parse_ports with a single port and colon syntax."""
+    assert parse_ports('8888:FireDept') == [PortConfig(8888, 'FireDept')]
 
 
 def test_parse_ports_multiple():
     """Test parse_ports with multiple ports."""
-    assert parse_ports('8888,8889,8890') == [8888, 8889, 8890]
+    assert parse_ports('8888,8889,8890') == [
+        PortConfig(8888),
+        PortConfig(8889),
+        PortConfig(8890),
+    ]
+
+
+def test_parse_ports_multiple_mixed():
+    """Test parse_ports with multiple ports using mixed syntax."""
+    assert parse_ports('8888=Cops,8889:Fire') == [
+        PortConfig(8888, 'Cops'),
+        PortConfig(8889, 'Fire'),
+    ]
 
 
 def test_parse_ports_with_spaces():
     """Test parse_ports handles spaces."""
-    assert parse_ports('8888, 8889') == [8888, 8889]
+    assert parse_ports('8888, 8889') == [PortConfig(8888), PortConfig(8889)]
+
+
+def test_parse_ports_empty_name_equals():
+    """Test parse_ports with empty name after equals raises ValueError."""
+    with pytest.raises(ValueError):
+        parse_ports('8888=')
+
+
+def test_parse_ports_empty_name_colon():
+    """Test parse_ports with empty name after colon raises ValueError."""
+    with pytest.raises(ValueError):
+        parse_ports('8888:')
+
+
+def test_parse_ports_whitespace_only_name():
+    """Test parse_ports with whitespace-only name raises ValueError."""
+    with pytest.raises(ValueError):
+        parse_ports('8888=   ')
 
 
 def test_parse_ports_invalid():
@@ -640,6 +681,7 @@ def test_parse_ports_empty():
 
 # --- FeedWidget compose tests ---
 
+
 class FeedWidgetTestApp(App):
     def __init__(self):
         super().__init__()
@@ -648,7 +690,7 @@ class FeedWidgetTestApp(App):
         self.sox_binary = None
         self.sox_rate = None
         self.charset = 'US'
-        self.ports = [8888]
+        self.port_configs = [PortConfig(8888)]
         self.message_count = []
         self.json_capable = True
         self.mmng.version = '1.4.0'
@@ -705,6 +747,7 @@ async def test_feed_widget_clear():
 
 # --- Multi-port tab tests ---
 
+
 class MultiPortTestApp(App):
     BINDINGS = [
         ('c', 'clear_screen', 'Clear'),
@@ -717,7 +760,7 @@ class MultiPortTestApp(App):
         self.sox_binary = None
         self.sox_rate = None
         self.charset = 'US'
-        self.ports = ports or [8888, 8889]
+        self.port_configs = [PortConfig(p) for p in (ports or [8888, 8889])]
         self.message_count = []
         self.json_capable = True
         self.mmng.version = '1.4.0'
@@ -792,3 +835,114 @@ async def test_clear_only_active_tab():
 
         assert len(list(t2.rows)) == 0, 'active tab should be cleared'
         assert len(list(t1.rows)) == 1, 'inactive tab should not be cleared'
+
+
+# --- Tab naming tests ---
+
+
+@pytest.mark.asyncio
+async def test_main_screen_tab_title_with_named_port():
+    """Test MainScreen shows custom name for named port."""
+    async with MainScreenTestApp(
+        port_configs=[PortConfig(8888, 'Cops')],
+    ).run_test() as pilot:
+        await pilot.pause()
+        tabs = pilot.app.screen.query_one(TabbedContent)
+        panes = list(tabs.query(TabPane))
+        assert len(panes) == 1
+        assert 'Cops' in str(panes[0]._title)
+
+
+@pytest.mark.asyncio
+async def test_main_screen_tab_title_with_unnamed_port():
+    """Test MainScreen shows default 'Port X' for unnamed port."""
+    async with MainScreenTestApp(
+        port_configs=[PortConfig(8888)],
+    ).run_test() as pilot:
+        await pilot.pause()
+        tabs = pilot.app.screen.query_one(TabbedContent)
+        panes = list(tabs.query(TabPane))
+        assert len(panes) == 1
+        assert 'Port 8888' in str(panes[0]._title)
+
+
+@pytest.mark.asyncio
+async def test_main_screen_mixed_named_unnamed_ports():
+    """Test MainScreen with mix of named and unnamed ports."""
+    async with MainScreenTestApp(
+        port_configs=[
+            PortConfig(8888, 'Cops'),
+            PortConfig(8889),
+            PortConfig(8890, 'Fire'),
+        ],
+    ).run_test() as pilot:
+        await pilot.pause()
+        tabs = pilot.app.screen.query_one(TabbedContent)
+        panes = list(tabs.query(TabPane))
+        assert len(panes) == 3
+        assert 'Cops' in str(panes[0]._title)
+        assert 'Port 8889' in str(panes[1]._title)
+        assert 'Fire' in str(panes[2]._title)
+
+
+# --- Runtime rename tests ---
+
+
+@pytest.mark.asyncio
+async def test_rename_tab_keybinding_opens_modal():
+    """Test that pressing 'r' opens the rename tab modal."""
+    async with ActionTestApp(port_configs=[PortConfig(8888, 'OldName')]).run_test() as pilot:
+        await pilot.pause()
+        assert not isinstance(pilot.app.screen, RenameTabScreen)
+
+        await pilot.press('r')
+        await pilot.pause()
+
+        assert isinstance(pilot.app.screen, RenameTabScreen)
+
+
+@pytest.mark.asyncio
+async def test_rename_tab_enter_confirms_change():
+    """Test that entering a name and pressing Enter renames the tab."""
+    async with ActionTestApp(port_configs=[PortConfig(8888, 'OldName')]).run_test() as pilot:
+        await pilot.pause()
+
+        await pilot.press('r')
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, RenameTabScreen)
+
+        # Type new name
+        await pilot.press(*'NewName')
+        await pilot.pause()
+
+        await pilot.press('enter')
+        await pilot.pause()
+
+        assert not isinstance(pilot.app.screen, RenameTabScreen)
+
+        tabs = pilot.app.screen.query_one(TabbedContent)
+        tab = tabs.get_tab('tab-8888')
+        assert 'NewName' in str(tab.label)
+
+
+@pytest.mark.asyncio
+async def test_rename_tab_escape_cancels():
+    """Test that pressing Escape cancels the rename without changing the tab."""
+    async with ActionTestApp(port_configs=[PortConfig(8888, 'OriginalName')]).run_test() as pilot:
+        await pilot.pause()
+
+        await pilot.press('r')
+        await pilot.pause()
+        assert isinstance(pilot.app.screen, RenameTabScreen)
+
+        await pilot.press(*'Changed')
+        await pilot.pause()
+
+        await pilot.press('escape')
+        await pilot.pause()
+
+        assert not isinstance(pilot.app.screen, RenameTabScreen)
+
+        tabs = pilot.app.screen.query_one(TabbedContent)
+        tab = tabs.get_tab('tab-8888')
+        assert 'OriginalName' in str(tab.label)

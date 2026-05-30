@@ -34,6 +34,7 @@ class ParseLine:
     :return: tuple of current time, timestamp, pager address and message
     :rtype: tuple
     """
+
     send_function_code: bool = True
     use_timestamp: bool = True
     json_detected: bool | None = None
@@ -63,7 +64,10 @@ class ParseLine:
                     return result, self.json_detected
             demod_name = json_line['demod_name']
             if 'pocsag' in demod_name.lower():
-                result.trim_message = re.sub(r'<[A-Za-z]{3}>', '', json_line.get('alpha', '')).replace('Ä', '[').replace('Ü', ']').strip() or ''
+                result.trim_message = (
+                    re.sub(r'<[A-Za-z]{3}>', '', json_line.get('alpha', '')).replace('Ä', '[').replace('Ü', ']').strip()
+                    or ''
+                )
             elif 'flex' in demod_name.lower():
                 result.trim_message = json_line.get('message', '')
 

@@ -66,9 +66,11 @@ def sample_data():
 def sample_json_data():
     return '{"demod_name":"POCSAG1200","address":1920312,"function":3,"alpha":"Time Critical Incident - Clear ASAP - or advise Comms of Time to Clear (Via Radio)"}'
 
+
 @pytest.fixture
 def sample_json_data_flex():
     return '{"timestamp": "2025-10-21 03:44:11", "sync_baud": 1600, "sync_level": 4, "phase_number": "A", "cycle_number": 11, "frame_number": 15, "capcode": 4294962309, "demod_name": "flex_alphanumeric", "message": "GW - CLEAR{AUTOMATIC SIGNAL DISABLED DURING PART LOAD OUT~CONVEYOR 1000349"}'
+
 
 @pytest.fixture(params=FLEX_LINES.splitlines())
 def flex_lines(request):
@@ -98,6 +100,7 @@ def test_parse_line_json(sample_json_data):
     assert result.address == '1920312'
     assert result.trim_message == 'Time Critical Incident - Clear ASAP - or advise Comms of Time to Clear (Via Radio)'
     assert json_detected is True
+
 
 def test_parse_line_json_flex_missing_address(sample_json_data_flex):
     parse_line = ParseLine()
@@ -166,14 +169,13 @@ def test_FLEX_parse_line_smoke(flex_lines):
 
 def test_FLEX_parse_line_known_aln_message():
     """Test for the specific ALN message line from FLEX_LINES line 29"""
-    line = 'FLEX|2024-12-08 21:18:46|3200/4/C/C|04.063|4294942723|ALN|nsult LOPEZ PEREZ 31373343 h/o spinal compression fx\'s MRI 12/7 subacute compression deformities, no evidence of cord compression. Pt neurologically intact. any acute surgical intervention? - Donald Thommes 6314176868 [68]3fL'
+    line = "FLEX|2024-12-08 21:18:46|3200/4/C/C|04.063|4294942723|ALN|nsult LOPEZ PEREZ 31373343 h/o spinal compression fx's MRI 12/7 subacute compression deformities, no evidence of cord compression. Pt neurologically intact. any acute surgical intervention? - Donald Thommes 6314176868 [68]3fL"
     parse_line = ParseLine()
     result, json_detected = parse_line.parse(line)
     assert result.address == '4294942723'
     assert result.timestamp == moment.date(2024, 12, 8, 21, 18, 46)
     assert (
-            result.trim_message
-            == 'nsult LOPEZ PEREZ 31373343 h/o spinal compression fx\'s MRI 12/7 subacute compression deformities, no evidence of cord compression. Pt neurologically intact. any acute surgical intervention? - Donald Thommes 6314176868 [68]3fL'
+        result.trim_message
+        == "nsult LOPEZ PEREZ 31373343 h/o spinal compression fx's MRI 12/7 subacute compression deformities, no evidence of cord compression. Pt neurologically intact. any acute surgical intervention? - Donald Thommes 6314176868 [68]3fL"
     )
     assert json_detected is False
-
