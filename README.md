@@ -179,3 +179,8 @@ Here's what a screen full of decodes might look like:
 ## Supported Python versions
 
 `mmng-ui` supports Python 3.10 and newer.
+
+## Star history
+
+[![GitHub stars](https://img.shields.io/github/stars/lingfish/mmng-ui?style=social)](https://github.com/lingfish/mmng-ui)
+[![Star History Chart](https://api.star-history.com/svg?repos=lingfish/mmng-ui&type=Date)](https://star-history.com/#lingfish/mmng-ui&Date)
