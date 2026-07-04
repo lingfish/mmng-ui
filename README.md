@@ -183,4 +183,4 @@ Here's what a screen full of decodes might look like:
 ## Star history
 
 [![GitHub stars](https://img.shields.io/github/stars/lingfish/mmng-ui?style=social)](https://github.com/lingfish/mmng-ui)
-[![Star History Chart](https://api.star-history.com/svg?repos=lingfish/mmng-ui&type=Date)](https://star-history.com/#lingfish/mmng-ui&Date)
+[![Star History Chart](https://api.star-history.com/chart?repos=lingfish/mmng-ui&type=date&legend=top-left)](https://www.star-history.com/?type=date&repos=lingfish%2Fmmng-ui)
