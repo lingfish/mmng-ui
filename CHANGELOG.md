@@ -1,3 +1,9 @@
+## 1.4.1 (2026-09-09)
+
+### fixed (1 change)
+
+- [Fix FLEX JSON address extraction — FLEX JSON output uses `capcode` not `address`; each demod branch now handles its own field.](lucid/mmng-ui@9ffcaf5)
+
 ## 1.4.0 (2026-05-30)
 
 ### added (5 changes)
