@@ -5,7 +5,18 @@ import pytest
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.message import Message
-from textual.widgets import DataTable, Digits, Footer, Header, Input, Markdown, RadioButton, RadioSet, TabbedContent, TabPane
+from textual.widgets import (
+    DataTable,
+    Digits,
+    Footer,
+    Header,
+    Input,
+    Markdown,
+    RadioButton,
+    RadioSet,
+    TabbedContent,
+    TabPane,
+)
 
 from mmng_ui.capcode_db import CapcodeDB
 from mmng_ui.pocsag import (

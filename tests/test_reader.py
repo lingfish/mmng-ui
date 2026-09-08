@@ -106,9 +106,22 @@ def test_parse_line_json_flex_missing_address(sample_json_data_flex):
     parse_line = ParseLine()
     result, json_detected = parse_line.parse(sample_json_data_flex)
     assert json_detected is True
-    assert result.address == ''
+    assert result.address == '4294962309'
     assert result.trim_message == 'GW - CLEAR{AUTOMATIC SIGNAL DISABLED DURING PART LOAD OUT~CONVEYOR 1000349'
     assert json_detected is True
+
+
+@pytest.fixture
+def sample_json_data_flex_issue3():
+    return '{"timestamp":"2026-09-08 21:03:08","sync_baud":1600,"sync_level":2,"phase_number":"A","cycle_number":0,"frame_number":110,"capcode":1234567,"demod_name":"flex_alphanumeric","message":"This is a test periodic page. 59 09:03"}'
+
+
+def test_parse_line_json_flex_extracts_capcode_as_address(sample_json_data_flex_issue3):
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(sample_json_data_flex_issue3)
+    assert json_detected is True
+    assert result.address == '1234567'
+    assert result.trim_message == 'This is a test periodic page. 59 09:03'
 
 
 def test_parse_line_invalid_not_json():

@@ -68,10 +68,10 @@ class ParseLine:
                     re.sub(r'<[A-Za-z]{3}>', '', json_line.get('alpha', '')).replace('Ä', '[').replace('Ü', ']').strip()
                     or ''
                 )
+                result.address = str(json_line.get('address', ''))
             elif 'flex' in demod_name.lower():
                 result.trim_message = json_line.get('message', '')
-
-            result.address = str(json_line.get('address', ''))
+                result.address = str(json_line.get('capcode', ''))
 
             return result, self.json_detected
 
