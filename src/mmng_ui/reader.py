@@ -62,14 +62,19 @@ class ParseLine:
                     result.trim_message = f'ERROR: multimon-ng returned non-JSON: {line}'
                     result.address = ''
                     return result, self.json_detected
-            demod_name = json_line['demod_name']
+            demod_name = json_line.get('demod_name', '')
+            msg_type = json_line.get('msg_type', '')
+
             if 'pocsag' in demod_name.lower():
                 result.trim_message = (
                     re.sub(r'<[A-Za-z]{3}>', '', json_line.get('alpha', '')).replace('Ä', '[').replace('Ü', ']').strip()
                     or ''
                 )
                 result.address = str(json_line.get('address', ''))
-            elif 'flex' in demod_name.lower():
+            elif 'flex' in demod_name.lower() or msg_type in (
+                'alphanumeric', 'numeric', 'tone_only', 'special_numeric',
+                'secure', 'instruction', 'short_msg', 'binary', 'numbered_numeric',
+            ):
                 result.trim_message = json_line.get('message', '')
                 result.address = str(json_line.get('capcode', ''))
 
