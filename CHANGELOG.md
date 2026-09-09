@@ -1,3 +1,9 @@
+## 1.4.2 (2026-09-09)
+
+### fixed (1 change)
+
+- [Support FLEX_NEXT JSON format from multimon-ng 1.6.0 — handle `msg_type` field as alternative to `demod_name`, support both legacy and FLEX_NEXT schemas, gracefully skip non-message packets (`bch_stats`, `biw_*`).](lucid/mmng-ui@a38419f) ([issue #3](lucid/mmng-ui/-/issues/3))
+
 ## 1.4.1 (2026-09-09)
 
 ### fixed (1 change)
