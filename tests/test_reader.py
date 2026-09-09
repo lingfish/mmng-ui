@@ -192,3 +192,90 @@ def test_FLEX_parse_line_known_aln_message():
         == "nsult LOPEZ PEREZ 31373343 h/o spinal compression fx's MRI 12/7 subacute compression deformities, no evidence of cord compression. Pt neurologically intact. any acute surgical intervention? - Donald Thommes 6314176868 [68]3fL"
     )
     assert json_detected is False
+
+
+# --- FLEX_NEXT JSON tests (multimon-ng 1.6.0) ---
+
+
+@pytest.fixture
+def flex_next_alphanumeric():
+    return '{"timestamp":"2026-09-09 01:17:14","baud":1600,"level":2,"phase":"A","cycle":4,"frame":49,"capcode":1234567,"addr_type":"S","is_group":false,"msg_type":"alphanumeric","type_tag":"ALN","fragment":"C","k_ok":true,"sig_ok":true,"message":"This is a test periodic page. 59 09:03"}'
+
+
+@pytest.fixture
+def flex_next_numeric():
+    return '{"timestamp":"2026-09-09 01:17:14","baud":1600,"level":2,"phase":"A","cycle":4,"frame":49,"capcode":997818,"addr_type":"S","is_group":false,"msg_type":"numeric","type_tag":"NUM","fragment":"C","k_ok":true,"sig_ok":true,"message":"1234"}'
+
+
+@pytest.fixture
+def flex_next_tone_only():
+    return '{"timestamp":"2026-09-09 01:17:14","baud":1600,"level":2,"phase":"A","cycle":4,"frame":49,"capcode":999075,"addr_type":"S","is_group":false,"msg_type":"tone_only","type_tag":"TON","fragment":"C","k_ok":true,"sig_ok":true,"message":""}'
+
+
+@pytest.fixture
+def flex_next_bch_stats():
+    return '{"timestamp":"2026-09-09 01:17:14","baud":1600,"level":2,"phase":"A","cycle":4,"frame":49,"msg_type":"bch_stats","polarity":"POS","bch_0err":88,"bch_1err":0,"bch_2err":0,"bch_uncorr":0,"errbits":0}'
+
+
+@pytest.fixture
+def flex_next_biw_sysid():
+    return '{"timestamp":"2026-09-09 01:17:14","baud":1600,"level":2,"phase":"A","cycle":4,"frame":49,"msg_type":"biw_sysid","type_tag":"BIW_SSID1","lid":12345,"cov":6}'
+
+
+@pytest.fixture
+def flex_next_unknown():
+    return '{"timestamp":"2026-09-09 01:17:14","baud":1600,"level":2,"phase":"A","cycle":4,"frame":49,"msg_type":"unknown_future_type","message":"something"}'
+
+
+def test_flex_next_alphanumeric(flex_next_alphanumeric):
+    """FLEX_NEXT alphanumeric: extract capcode as address, message content"""
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(flex_next_alphanumeric)
+    assert json_detected is True
+    assert result.address == '1234567'
+    assert result.trim_message == 'This is a test periodic page. 59 09:03'
+
+
+def test_flex_next_numeric(flex_next_numeric):
+    """FLEX_NEXT numeric: extract capcode as address, numeric message"""
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(flex_next_numeric)
+    assert json_detected is True
+    assert result.address == '997818'
+    assert result.trim_message == '1234'
+
+
+def test_flex_next_tone_only(flex_next_tone_only):
+    """FLEX_NEXT tone_only: extract capcode as address, empty message"""
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(flex_next_tone_only)
+    assert json_detected is True
+    assert result.address == '999075'
+    assert result.trim_message == ''
+
+
+def test_flex_next_bch_stats(flex_next_bch_stats):
+    """FLEX_NEXT bch_stats: non-message type should return default PocsagMessage without crashing"""
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(flex_next_bch_stats)
+    assert json_detected is True
+    assert result.address is None
+    assert result.trim_message is None
+
+
+def test_flex_next_biw_sysid(flex_next_biw_sysid):
+    """FLEX_NEXT biw_sysid: non-message type should return default PocsagMessage without crashing"""
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(flex_next_biw_sysid)
+    assert json_detected is True
+    assert result.address is None
+    assert result.trim_message is None
+
+
+def test_flex_next_unknown_type(flex_next_unknown):
+    """FLEX_NEXT unknown msg_type: should return default PocsagMessage without crashing"""
+    parse_line = ParseLine()
+    result, json_detected = parse_line.parse(flex_next_unknown)
+    assert json_detected is True
+    assert result.address is None
+    assert result.trim_message is None
