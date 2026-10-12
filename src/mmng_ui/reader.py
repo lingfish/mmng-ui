@@ -39,6 +39,46 @@ class ParseLine:
     use_timestamp: bool = True
     json_detected: bool | None = None
 
+    def _parse_json(self, json_line: Any, result: PocsagMessage) -> PocsagMessage:
+        """Parse a multimon-ng unified JSON schema object (schema v2+).
+
+        The envelope is stable across schema versions: `kind` classifies the
+        frame (message / event / diagnostic), `capcode` is the unified address
+        (null for non-addressed frames), and `message` is the best-decode
+        shortcut. Only `kind == "message"` carries a subscriber payload;
+        events and diagnostics produce no table row, avoiding the field-
+        presence crashes of the pre-schema era (mmng-ui#3).
+        """
+        kind = json_line.get('kind', '')
+
+        capcode = json_line.get('capcode')
+        result.address = '' if capcode is None else str(capcode)
+
+        if kind != 'message':
+            # Event (tone_only, biw_*, flextime, eas_*) or diagnostic
+            # (bch_stats): no displayable message. Leave trim_message unset.
+            result.trim_message = None
+            return result
+
+        message = json_line.get('message') or ''
+        # Strip <XXX> control-char markers and apply the same umlaut cleanup
+        # the legacy path uses, so display is consistent across schemas.
+        result.trim_message = (
+            re.sub(r'<[A-Za-z]{3}>', '', message).replace('Ä', '[').replace('Ü', ']').strip() or None
+        )
+
+        # timestamp is Unix epoch seconds (int). Convert to a Moment when
+        # requested so the UI can show it; fall back silently if absent.
+        if self.use_timestamp:
+            ts = json_line.get('timestamp')
+            if isinstance(ts, (int, float)):
+                try:
+                    result.timestamp = moment.unix(ts, utc=True)
+                except (ValueError, TypeError):
+                    pass
+
+        return result
+
     def parse(self, line: str) -> tuple[PocsagMessage, bool]:
         result = PocsagMessage()
         message: str | None = None
@@ -62,6 +102,14 @@ class ParseLine:
                     result.trim_message = f'ERROR: multimon-ng returned non-JSON: {line}'
                     result.address = ''
                     return result, self.json_detected
+
+            # --- multimon-ng JSON schema v2 (schema/json/v2.json) ---
+            # Unified JSON envelope (schema v2): kind, capcode, message.
+            # Only kind == "message" has a subscriber payload; events and
+            # diagnostics are skipped cleanly (cf. mmng-ui#3).
+            if json_line.get('schema_version') == 2:
+                return self._parse_json(json_line, result), self.json_detected
+
             demod_name = json_line.get('demod_name', '')
             msg_type = json_line.get('msg_type', '')
 
